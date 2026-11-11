@@ -1,0 +1,208 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/api_client.dart';
+import '../../models/models.dart';
+
+/// Keadaan sesi. Router membaca ini untuk memutuskan layar mana yang tampil:
+/// masuk (01), onboarding (03-04), atau aplikasi utama.
+class SesiState {
+  const SesiState({
+    this.user,
+    this.couple,
+    this.partner,
+    this.balance = 0,
+    this.memuat = true,
+    this.pengaturan = const {},
+  });
+
+  final Pengguna? user;
+  final Pasangan? couple;
+  final Pengguna? partner;
+  final int balance;
+
+  /// Sakelar di layar Profil: `share_cycle`, `remind_period`, `remind_bills`.
+  final Map<String, bool> pengaturan;
+
+  bool nyala(String kunci) => pengaturan[kunci] ?? false;
+
+  /// true selama token lama sedang diperiksa saat aplikasi dibuka.
+  final bool memuat;
+
+  bool get masuk => user != null;
+
+  bool get perluOnboarding => user?.needsOnboarding ?? false;
+
+  bool get terhubung => partner != null;
+
+  SesiState copyWith({
+    Pengguna? user,
+    Pasangan? couple,
+    Pengguna? partner,
+    int? balance,
+    bool? memuat,
+    Map<String, bool>? pengaturan,
+    bool kosongkan = false,
+  }) {
+    if (kosongkan) return const SesiState(memuat: false);
+
+    return SesiState(
+      user: user ?? this.user,
+      couple: couple ?? this.couple,
+      partner: partner ?? this.partner,
+      balance: balance ?? this.balance,
+      memuat: memuat ?? this.memuat,
+      pengaturan: pengaturan ?? this.pengaturan,
+    );
+  }
+}
+
+/// Baris `settings` dari backend bisa kosong (belum pernah diubah) dan nilai
+/// boolean-nya bisa datang sebagai 0/1.
+Map<String, bool> _bacaPengaturan(Object? json) {
+  if (json is! Map) return const {};
+
+  return {
+    for (final kunci in const ['share_cycle', 'remind_period', 'remind_bills'])
+      kunci: json[kunci] == true || json[kunci] == 1,
+  };
+}
+
+class SesiController extends Notifier<SesiState> {
+  @override
+  SesiState build() {
+    Future.microtask(pulihkan);
+
+    return const SesiState();
+  }
+
+  /// Dipakai saat aplikasi dibuka: kalau masih ada token, langsung muat profil.
+  Future<void> pulihkan() async {
+    final token = await ref.read(tokenStoreProvider).read();
+
+    if (token == null) {
+      state = const SesiState(memuat: false);
+
+      return;
+    }
+
+    try {
+      await muatProfil();
+    } on ApiException catch (error) {
+      // Token sudah tidak berlaku: bersihkan dan kembali ke layar masuk.
+      if (error.isUnauthorized) {
+        await ref.read(tokenStoreProvider).clear();
+      }
+
+      state = const SesiState(memuat: false);
+    }
+  }
+
+  Future<void> muatProfil() async {
+    final data = await ref.read(dioProvider).send('GET', '/me');
+
+    state = SesiState(
+      user: Pengguna.fromJson(data['user'] as Map<String, dynamic>),
+      couple: data['couple'] == null
+          ? null
+          : Pasangan.fromJson(data['couple'] as Map<String, dynamic>),
+      partner: data['partner'] == null
+          ? null
+          : Pengguna.fromJson(data['partner'] as Map<String, dynamic>),
+      balance: data['balance'] as int? ?? 0,
+      memuat: false,
+      pengaturan: _bacaPengaturan(data['settings']),
+    );
+  }
+
+  /// Sakelar di layar Profil. Tampilan diubah lebih dulu supaya sakelar
+  /// langsung bergeser; kalau server menolak, nilainya dikembalikan.
+  Future<void> ubahPengaturan(String kunci, bool nilai) async {
+    final sebelum = state.pengaturan;
+
+    state = state.copyWith(pengaturan: {...sebelum, kunci: nilai});
+
+    try {
+      final data = await ref
+          .read(dioProvider)
+          .send('PATCH', '/me/settings', body: {kunci: nilai});
+
+      state = state.copyWith(pengaturan: _bacaPengaturan(data['settings']));
+    } on ApiException {
+      state = state.copyWith(pengaturan: sebelum);
+      rethrow;
+    }
+  }
+
+  /// Layar 01: minta kode verifikasi. Mengembalikan petunjuk email tersamar
+  /// untuk ditampilkan di layar 02.
+  Future<({String emailHint, String? devCode})> mintaKode(String phone) async {
+    final data = await ref
+        .read(dioProvider)
+        .send('POST', '/auth/request-code', body: {'phone_number': phone});
+
+    return (
+      emailHint: data['email_hint'] as String? ?? '',
+      devCode: data['dev_code'] as String?,
+    );
+  }
+
+  /// Layar 02: tukar kode dengan token.
+  Future<void> verifikasi(String phone, String code) async {
+    final data = await ref.read(dioProvider).send(
+      'POST',
+      '/auth/verify',
+      body: {'phone_number': phone, 'code': code},
+    );
+
+    await ref.read(tokenStoreProvider).write(data['token'] as String);
+
+    state = SesiState(
+      user: Pengguna.fromJson(data['user'] as Map<String, dynamic>),
+      couple: data['couple'] == null
+          ? null
+          : Pasangan.fromJson(data['couple'] as Map<String, dynamic>),
+      partner: data['partner'] == null
+          ? null
+          : Pengguna.fromJson(data['partner'] as Map<String, dynamic>),
+      memuat: false,
+    );
+  }
+
+  /// Onboarding langkah 2 (layar 04): nama panggilan dan pilihan siklus.
+  Future<void> simpanProfil({required String nama, required bool catatSiklus}) async {
+    final data = await ref.read(dioProvider).send(
+      'PATCH',
+      '/me',
+      body: {'name': nama, 'tracks_cycle': catatSiklus},
+    );
+
+    state = state.copyWith(
+      user: Pengguna.fromJson(data['user'] as Map<String, dynamic>),
+    );
+  }
+
+  Future<void> terbitkanUlangKode() async {
+    final data = await ref
+        .read(dioProvider)
+        .send('POST', '/couple/invite/refresh');
+
+    state = state.copyWith(
+      couple: Pasangan.fromJson(data['couple'] as Map<String, dynamic>),
+    );
+  }
+
+  Future<void> keluar() async {
+    try {
+      await ref.read(dioProvider).send('POST', '/auth/logout');
+    } on ApiException {
+      // Token mungkin sudah tidak berlaku di server; sesi lokal tetap dibersihkan.
+    }
+
+    await ref.read(tokenStoreProvider).clear();
+    state = const SesiState(memuat: false);
+  }
+}
+
+final sesiProvider = NotifierProvider<SesiController, SesiState>(
+  SesiController.new,
+);
