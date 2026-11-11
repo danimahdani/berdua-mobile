@@ -2,23 +2,23 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/hiasan_pasangan.dart';
-import 'auth_controller.dart';
+import 'sesi_cubit.dart';
 
 /// Layar 03 (perkenalan), 04 (profil) dan 05 (undang pasangan).
-class OnboardingScreen extends ConsumerStatefulWidget {
+class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen> {
   final _nama = TextEditingController();
 
   int _langkah = 0;
@@ -47,7 +47,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     });
 
     try {
-      await ref.read(sesiProvider.notifier).simpanProfil(
+      await context.read<SesiCubit>().simpanProfil(
         nama: _nama.text.trim(),
         catatSiklus: _catatSiklus ?? false,
       );
@@ -62,7 +62,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sesi = ref.watch(sesiProvider);
+    final sesi = context.watch<SesiCubit>().state;
     final text = Theme.of(context).textTheme;
 
     final isi = switch (_langkah) {
@@ -108,9 +108,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           child: Text(
             judul,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontSize: 20,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontSize: 20),
           ),
         ),
         const SizedBox(width: Sizes.backButton),
@@ -134,10 +134,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       Text(
         'Uang, siklus, belanja, dan rencana kalian di satu tempat yang sama.',
         textAlign: TextAlign.center,
-        style: text.bodyLarge?.copyWith(
-          color: BerduaColors.label,
-          height: 1.5,
-        ),
+        style: text.bodyLarge?.copyWith(color: BerduaColors.label, height: 1.5),
       ),
       const Spacer(),
       const SizedBox(height: 18),
@@ -295,7 +292,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         label: pasangan != null ? 'Selesai' : 'Masuk ke Berdua',
         // Router berpindah sendiri setelah onboarding selesai; memuat ulang
         // profil cukup untuk memicunya.
-        onPressed: () => ref.read(sesiProvider.notifier).muatProfil(),
+        onPressed: () => context.read<SesiCubit>().muatProfil(),
       ),
       if (pasangan == null) ...[
         const SizedBox(height: Gap.md),
@@ -410,9 +407,9 @@ class _DuaKartu extends StatelessWidget {
           children: [
             Text(
               label,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontSize: 20,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontSize: 20),
             ),
             const SizedBox(height: Gap.sm),
             Expanded(

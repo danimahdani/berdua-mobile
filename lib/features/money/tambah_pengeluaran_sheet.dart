@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
-import '../auth/auth_controller.dart';
-import 'money_controller.dart';
+import '../auth/sesi_cubit.dart';
+import 'uang_cubit.dart';
 
 /// Layar 09 (Tambah pengeluaran) dan 11 (Ubah transaksi) — satu bottom sheet,
 /// karena formulirnya sama dan hanya berbeda nilai awal.
-class TambahPengeluaranSheet extends ConsumerStatefulWidget {
+class TambahPengeluaranSheet extends StatefulWidget {
   const TambahPengeluaranSheet({super.key, this.transaksi});
 
   final Transaksi? transaksi;
@@ -25,12 +25,10 @@ class TambahPengeluaranSheet extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<TambahPengeluaranSheet> createState() =>
-      _TambahPengeluaranSheetState();
+  State<TambahPengeluaranSheet> createState() => _TambahPengeluaranSheetState();
 }
 
-class _TambahPengeluaranSheetState
-    extends ConsumerState<TambahPengeluaranSheet> {
+class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
   /// Nilai segmen "Dibayar oleh" untuk dompet bersama, yang tidak punya id.
   static const _dompet = 0;
 
@@ -61,7 +59,9 @@ class _TambahPengeluaranSheetState
     _kategori = awal?.category ?? BerduaEnums.categories.first;
     _split = awal?.split ?? CaraPembagian.equal;
     // Pengeluaran baru paling sering dibayar orang yang mencatatnya.
-    _payerId = awal == null ? ref.read(sesiProvider).user?.id : awal.payerId;
+    _payerId = awal == null
+        ? context.read<SesiCubit>().state.user?.id
+        : awal.payerId;
     _porsiCustom = awal?.payerSharePct ?? 50;
     _tanggal = awal?.date ?? DateTime.now();
 
@@ -121,7 +121,7 @@ class _TambahPengeluaranSheetState
     });
 
     try {
-      final controller = ref.read(uangProvider.notifier);
+      final controller = context.read<UangCubit>();
 
       if (_ubah) {
         await controller.ubah(
@@ -161,7 +161,7 @@ class _TambahPengeluaranSheetState
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final sesi = ref.watch(sesiProvider);
+    final sesi = context.watch<SesiCubit>().state;
     final anggota = [sesi.user, sesi.partner].whereType<Pengguna>().toList();
     final dompet = _split == CaraPembagian.wallet;
 

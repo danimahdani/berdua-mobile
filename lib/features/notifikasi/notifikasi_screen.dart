@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
@@ -7,77 +7,8 @@ import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../beranda/beranda_controller.dart';
-import '../bersama/bersama_screen.dart';
-
-/// Satu baris notifikasi (§5.5).
-class Notifikasi {
-  const Notifikasi({
-    required this.id,
-    required this.type,
-    required this.text,
-    required this.read,
-    required this.createdAt,
-  });
-
-  factory Notifikasi.fromJson(Map<String, dynamic> json) => Notifikasi(
-    id: json['id'] as int,
-    type: json['type'] as String,
-    text: json['text'] as String,
-    read: json['read'] as bool? ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
-  );
-
-  final int id;
-  final String type;
-  final String text;
-  final bool read;
-  final DateTime createdAt;
-
-  /// Ikon per pemicu di §5.5.
-  IconData get ikon => switch (type) {
-    'transaction_new' => Icons.receipt_long_outlined,
-    'transaction_changed' => Icons.edit_outlined,
-    'settlement' => Icons.check_circle_outline,
-    'period_forecast' => Icons.favorite_outline,
-    'todo_due' => Icons.task_alt_outlined,
-    'event_reminder' => Icons.event_outlined,
-    'shopping_new' => Icons.shopping_basket_outlined,
-    'saving_milestone' => Icons.savings_outlined,
-    _ => Icons.notifications_none,
-  };
-}
-
-class NotifikasiController extends AsyncNotifier<List<Notifikasi>> {
-  @override
-  Future<List<Notifikasi>> build() async {
-    final data = await ref.read(dioProvider).send('GET', '/notifications');
-
-    return (data['data'] as List<dynamic>)
-        .map((e) => Notifikasi.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<void> tandaiSemuaDibaca() async {
-    await ref.read(dioProvider).send('POST', '/notifications/read-all');
-
-    // Sengaja TIDAK menyetel AsyncValue.loading() di sini: isi lama
-    // bertahan di layar selama permintaan berjalan, sehingga penambahan
-    // kecil tidak membuat seluruh daftar berkedip jadi kerangka.
-    // Kerangka hanya untuk pemuatan pertama; tombol yang menekan aksi
-    // sudah menampilkan indikatornya sendiri.
-    state = await AsyncValue.guard(build);
-
-    // Lonceng di layar 06 ikut diperbarui.
-    await ref.read(berandaProvider.notifier).segarkan();
-  }
-}
-
-final notifikasiProvider =
-    AsyncNotifierProvider<NotifikasiController, List<Notifikasi>>(
-  NotifikasiController.new,
-);
-
+import '../bersama/bersama_cubit.dart';
+import 'notifikasi_cubit.dart';
 
 /// Warna ubin ikon per jenis notifikasi.
 ({Color latar, Color warna}) _warnaJenis(String type) => switch (type) {
@@ -102,13 +33,13 @@ final notifikasiProvider =
 };
 
 /// Layar 07: Notifikasi.
-class NotifikasiScreen extends ConsumerWidget {
+class NotifikasiScreen extends StatelessWidget {
   const NotifikasiScreen({super.key});
 
   /// Mengetuk notifikasi membawa ke tempat kejadiannya.
-  void _buka(BuildContext context, WidgetRef ref, Notifikasi row) {
+  void _buka(BuildContext context, Notifikasi row) {
     void keBersama(BagianBersama bagian) {
-      ref.read(bagianBersamaProvider.notifier).pilih(bagian);
+      context.read<BagianBersamaCubit>().pilih(bagian);
       context.go('/bersama');
     }
 
@@ -129,20 +60,18 @@ class NotifikasiScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final daftar = ref.watch(notifikasiProvider);
+  Widget build(BuildContext context) {
+    final daftar = context.watch<NotifikasiCubit>().state;
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
       body: daftar.when(
-        skipLoadingOnReload: true,
-        skipLoadingOnRefresh: true,
         loading: () => const SkeletonNotifikasi(),
         error: (error, _) => GalatLayar(
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat notifikasi.',
-          onUlangi: () => ref.invalidate(notifikasiProvider),
+          onUlangi: () => context.read<NotifikasiCubit>().muat(),
         ),
         data: (rows) {
           final belumDibaca = rows.where((row) => !row.read).length;
@@ -151,7 +80,7 @@ class NotifikasiScreen extends ConsumerWidget {
             judul: 'Notifikasi',
             stiker: JenisStiker.bell,
             kembali: true,
-            onSegarkan: () => ref.refresh(notifikasiProvider.future),
+            onSegarkan: () => context.read<NotifikasiCubit>().segarkan(),
             children: [
               if (belumDibaca > 0) ...[
                 Align(
@@ -165,8 +94,8 @@ class NotifikasiScreen extends ConsumerWidget {
                       final messenger = ScaffoldMessenger.of(context);
 
                       try {
-                        await ref
-                            .read(notifikasiProvider.notifier)
+                        await context
+                            .read<NotifikasiCubit>()
                             .tandaiSemuaDibaca();
                       } on ApiException catch (error) {
                         tampilkanToastVia(messenger, error.message);
@@ -208,7 +137,7 @@ class NotifikasiScreen extends ConsumerWidget {
                         horizontal: 16,
                         vertical: 14,
                       ),
-                      onTap: () => _buka(context, ref, row),
+                      onTap: () => _buka(context, row),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

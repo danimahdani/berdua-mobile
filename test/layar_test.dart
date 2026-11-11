@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:berdua/core/api_client.dart';
-import 'package:berdua/features/auth/auth_controller.dart';
+import 'package:berdua/features/auth/sesi_cubit.dart';
 import 'package:berdua/features/auth/masuk_screen.dart';
 import 'package:berdua/features/auth/onboarding_screen.dart';
 import 'package:berdua/features/beranda/beranda_screen.dart';
+import 'package:berdua/features/bersama/bersama_cubit.dart';
 import 'package:berdua/features/bersama/bersama_screen.dart';
 import 'package:berdua/features/bersama/tabungan_detail_screen.dart';
 import 'package:berdua/features/laporan/laporan_screen.dart';
@@ -16,10 +17,11 @@ import 'package:berdua/features/profil/profil_screen.dart';
 import 'package:berdua/features/siklus/riwayat_screen.dart';
 import 'package:berdua/features/siklus/siklus_screen.dart';
 import 'package:berdua/models/models.dart';
+import 'package:berdua/penyedia.dart';
 import 'package:berdua/theme/berdua_theme.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -247,7 +249,12 @@ Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
   if (path.endsWith('/shopping')) {
     return {
       'data': [
-        {'id': 1, 'title': 'Beras 5 kg', 'added_by_name': 'Dinda', 'done': false},
+        {
+          'id': 1,
+          'title': 'Beras 5 kg',
+          'added_by_name': 'Dinda',
+          'done': false,
+        },
         {
           'id': 2,
           'title': 'Sabun cuci piring isi ulang ukuran besar sekali',
@@ -371,20 +378,19 @@ class _Adaptor implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-class _SesiPalsu extends SesiController {
-  _SesiPalsu({this.sebagaiPasangan = false});
-
-  final bool sebagaiPasangan;
-
-  @override
-  SesiState build() => SesiState(
+/// Sesi yang sudah masuk, tanpa memeriksa token di penyimpanan.
+SesiCubit _sesiPalsu(Dio dio, {bool sebagaiPasangan = false}) => SesiCubit(
+  dio,
+  TokenStore(),
+  pulihkanSaatMulai: false,
+  awal: SesiState(
     user: Pengguna.fromJson(sebagaiPasangan ? _raka : _dinda),
     partner: Pengguna.fromJson(sebagaiPasangan ? _dinda : _raka),
     couple: Pasangan.fromJson(_pasangan),
     memuat: false,
     pengaturan: const {'share_cycle': true, 'remind_period': true},
-  );
-}
+  ),
+);
 
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
@@ -399,17 +405,13 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
+    final dio = Dio(BaseOptions(baseUrl: 'http://uji.lokal/api'))
+      ..httpClientAdapter = _Adaptor(siklusPasangan: sebagaiPasangan);
+
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sesiProvider.overrideWith(
-            () => _SesiPalsu(sebagaiPasangan: sebagaiPasangan),
-          ),
-          dioProvider.overrideWithValue(
-            Dio(BaseOptions(baseUrl: 'http://uji.lokal/api'))
-              ..httpClientAdapter = _Adaptor(siklusPasangan: sebagaiPasangan),
-          ),
-        ],
+      PenyediaBerdua(
+        dio: dio,
+        sesi: (_) => _sesiPalsu(dio, sebagaiPasangan: sebagaiPasangan),
         child: MaterialApp(theme: BerduaTheme.light(), home: layar),
       ),
     );
@@ -483,12 +485,12 @@ void main() {
       testWidgets('tiap bagian Bersama', (tester) async {
         await pasang(tester, const BersamaScreen(), ukuran: ukuran);
 
-        final wadah = ProviderScope.containerOf(
-          tester.element(find.byType(BersamaScreen)),
-        );
+        final bagianCubit = tester
+            .element(find.byType(BersamaScreen))
+            .read<BagianBersamaCubit>();
 
         for (final bagian in BagianBersama.values) {
-          wadah.read(bagianBersamaProvider.notifier).pilih(bagian);
+          bagianCubit.pilih(bagian);
 
           for (var i = 0; i < 8; i++) {
             await tester.pump(const Duration(milliseconds: 50));

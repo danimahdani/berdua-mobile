@@ -1,48 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/muatan.dart';
 import '../../core/rupiah.dart';
 import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../auth/auth_controller.dart';
-import 'bersama_controller.dart';
-
-/// Bagian-bagian layar "Bersama" (§5.4).
-enum BagianBersama {
-  belanja('Belanja'),
-  todo('To-do'),
-  tabungan('Tabungan'),
-  jadwal('Jadwal'),
-  jurnal('Jurnal');
-
-  const BagianBersama(this.label);
-
-  final String label;
-}
-
-final bagianBersamaProvider = NotifierProvider<_BagianController, BagianBersama>(
-  _BagianController.new,
-);
-
-class _BagianController extends Notifier<BagianBersama> {
-  @override
-  BagianBersama build() => BagianBersama.belanja;
-
-  void pilih(BagianBersama bagian) => state = bagian;
-}
+import '../auth/sesi_cubit.dart';
+import 'bersama_cubit.dart';
 
 /// Layar 16-22 dalam satu tab, dipilih lewat segmen di atas.
-class BersamaScreen extends ConsumerWidget {
+class BersamaScreen extends StatelessWidget {
   const BersamaScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bagian = ref.watch(bagianBersamaProvider);
+  Widget build(BuildContext context) {
+    final bagian = context.watch<BagianBersamaCubit>().state;
 
     return Scaffold(
       body: LayarBerdua(
@@ -57,8 +34,7 @@ class BersamaScreen extends ConsumerWidget {
             pilihan: BagianBersama.values,
             terpilih: bagian,
             label: (item) => item.label,
-            onPilih: (item) =>
-                ref.read(bagianBersamaProvider.notifier).pilih(item),
+            onPilih: (item) => context.read<BagianBersamaCubit>().pilih(item),
           ),
           const SizedBox(height: Gap.betweenCards),
           switch (bagian) {
@@ -87,7 +63,7 @@ class _Bagian<T> extends StatefulWidget {
     this.stikerKosong = JenisStiker.bag,
   });
 
-  final AsyncValue<List<T>> nilai;
+  final Muatan<List<T>> nilai;
   final String kosong;
   final JenisStiker stikerKosong;
   final List<Widget> Function(List<T>) bangun;
@@ -112,8 +88,6 @@ class _BagianState<T> extends State<_Bagian<T>> {
     final text = Theme.of(context).textTheme;
 
     final isi = widget.nilai.when(
-      skipLoadingOnReload: true,
-      skipLoadingOnRefresh: true,
       loading: () => [widget.skeleton],
       error: (error, _) => [
         KartuBerdua(
@@ -213,9 +187,9 @@ class _IsianTambah extends StatelessWidget {
             controller: kendali,
             textCapitalization: TextCapitalization.sentences,
             textInputAction: TextInputAction.done,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize: 17,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(fontSize: 17),
             inputFormatters: [LengthLimitingTextInputFormatter(80)],
             onSubmitted: (_) => onTambah(),
             decoration: InputDecoration(hintText: petunjuk),
@@ -272,7 +246,9 @@ class _BarisCentang extends StatelessWidget {
                       // Yang sudah selesai ditandai coret dan diredupkan.
                       decoration: selesai ? TextDecoration.lineThrough : null,
                       decorationColor: BerduaColors.teksCoret,
-                      color: selesai ? BerduaColors.teksCoret : BerduaColors.ink,
+                      color: selesai
+                          ? BerduaColors.teksCoret
+                          : BerduaColors.ink,
                     ),
                   ),
                   if (keterangan != null) ...[
@@ -293,7 +269,10 @@ class _BarisCentang extends StatelessWidget {
 
 /// Menjalankan aksi kecil (centang, hapus) dan menampilkan galatnya sebagai
 /// toast.
-Future<void> _jalankan(BuildContext context, Future<void> Function() aksi) async {
+Future<void> _jalankan(
+  BuildContext context,
+  Future<void> Function() aksi,
+) async {
   final messenger = ScaffoldMessenger.of(context);
 
   try {
@@ -305,14 +284,14 @@ Future<void> _jalankan(BuildContext context, Future<void> Function() aksi) async
 
 // --------------------------------------------------------------- layar 16
 
-class _Belanja extends ConsumerStatefulWidget {
+class _Belanja extends StatefulWidget {
   const _Belanja();
 
   @override
-  ConsumerState<_Belanja> createState() => _BelanjaState();
+  State<_Belanja> createState() => _BelanjaState();
 }
 
-class _BelanjaState extends ConsumerState<_Belanja> {
+class _BelanjaState extends State<_Belanja> {
   final _judul = TextEditingController();
   bool _menyimpan = false;
 
@@ -332,7 +311,7 @@ class _BelanjaState extends ConsumerState<_Belanja> {
     setState(() => _menyimpan = true);
 
     try {
-      await ref.read(belanjaProvider.notifier).tambah(judul);
+      await context.read<BelanjaCubit>().tambah(judul);
       _judul.clear();
     } on ApiException catch (error) {
       tampilkanToastVia(messenger, error.message);
@@ -344,13 +323,13 @@ class _BelanjaState extends ConsumerState<_Belanja> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final belanja = ref.read(belanjaProvider.notifier);
+    final belanja = context.read<BelanjaCubit>();
 
     return _Bagian<BarangBelanja>(
-      nilai: ref.watch(belanjaProvider),
+      nilai: context.watch<BelanjaCubit>().state,
       kosong: 'Daftar belanja masih kosong.',
       skeleton: const SkeletonDaftar(sematan: true, tinggiBaris: 56),
-      onUlangi: () => ref.invalidate(belanjaProvider),
+      onUlangi: () => context.read<BelanjaCubit>().muat(),
       atas: [
         _IsianTambah(
           kendali: _judul,
@@ -379,14 +358,14 @@ class _BelanjaState extends ConsumerState<_Belanja> {
 
 // --------------------------------------------------------------- layar 17
 
-class _Todo extends ConsumerStatefulWidget {
+class _Todo extends StatefulWidget {
   const _Todo();
 
   @override
-  ConsumerState<_Todo> createState() => _TodoState();
+  State<_Todo> createState() => _TodoState();
 }
 
-class _TodoState extends ConsumerState<_Todo> {
+class _TodoState extends State<_Todo> {
   final _judul = TextEditingController();
   int? _assignee;
   DateTime? _tenggat;
@@ -408,7 +387,7 @@ class _TodoState extends ConsumerState<_Todo> {
     setState(() => _menyimpan = true);
 
     try {
-      await ref.read(todoProvider.notifier).tambah(
+      await context.read<TodoCubit>().tambah(
         judul: judul,
         assigneeId: _assignee,
         tenggat: _tenggat,
@@ -446,16 +425,16 @@ class _TodoState extends ConsumerState<_Todo> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final sesi = ref.watch(sesiProvider);
+    final sesi = context.watch<SesiCubit>().state;
     final anggota = [sesi.user, sesi.partner].whereType<Pengguna>().toList();
-    final todo = ref.read(todoProvider.notifier);
+    final todo = context.read<TodoCubit>();
 
     return _Bagian<Tugas>(
-      nilai: ref.watch(todoProvider),
+      nilai: context.watch<TodoCubit>().state,
       kosong: 'Belum ada tugas.',
       stikerKosong: JenisStiker.check,
       skeleton: const SkeletonDaftar(sematan: true, baris: 3, tinggiBaris: 64),
-      onUlangi: () => ref.invalidate(todoProvider),
+      onUlangi: () => context.read<TodoCubit>().muat(),
       atas: [
         _IsianTambah(
           kendali: _judul,
@@ -526,19 +505,19 @@ class _TodoState extends ConsumerState<_Todo> {
 
 // ------------------------------------------------------------ layar 18-19
 
-class _Tabungan extends ConsumerWidget {
+class _Tabungan extends StatelessWidget {
   const _Tabungan();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
 
     return _Bagian<TargetTabungan>(
-      nilai: ref.watch(tabunganProvider),
+      nilai: context.watch<TabunganCubit>().state,
       kosong: 'Belum ada target tabungan.',
       stikerKosong: JenisStiker.piggy,
       skeleton: const SkeletonDaftar(sematan: true, baris: 2, tinggiBaris: 112),
-      onUlangi: () => ref.invalidate(tabunganProvider),
+      onUlangi: () => context.read<TabunganCubit>().muat(),
       atas: [
         TombolPutus(
           label: 'Tambah target tabungan',
@@ -613,7 +592,11 @@ class _Tabungan extends ConsumerWidget {
 
 /// Kotak bergaris yang membuka pemilih tanggal — pengganti input tanggal.
 class _IsianTanggal extends StatelessWidget {
-  const _IsianTanggal({required this.teks, required this.onTap, this.terisi = true});
+  const _IsianTanggal({
+    required this.teks,
+    required this.onTap,
+    this.terisi = true,
+  });
 
   final String teks;
   final bool terisi;
@@ -651,14 +634,14 @@ class _IsianTanggal extends StatelessWidget {
   }
 }
 
-class _TabunganSheet extends ConsumerStatefulWidget {
+class _TabunganSheet extends StatefulWidget {
   const _TabunganSheet();
 
   @override
-  ConsumerState<_TabunganSheet> createState() => _TabunganSheetState();
+  State<_TabunganSheet> createState() => _TabunganSheetState();
 }
 
-class _TabunganSheetState extends ConsumerState<_TabunganSheet> {
+class _TabunganSheetState extends State<_TabunganSheet> {
   final _judul = TextEditingController();
   final _target = TextEditingController();
   DateTime? _tenggat;
@@ -691,7 +674,7 @@ class _TabunganSheetState extends ConsumerState<_TabunganSheet> {
     });
 
     try {
-      await ref.read(tabunganProvider.notifier).tambah(
+      await context.read<TabunganCubit>().tambah(
         judul: _judul.text.trim(),
         target: target,
         tenggat: _tenggat,
@@ -776,20 +759,20 @@ class _TabunganSheetState extends ConsumerState<_TabunganSheet> {
 
 // ------------------------------------------------------------ layar 20-21
 
-class _Jadwal extends ConsumerWidget {
+class _Jadwal extends StatelessWidget {
   const _Jadwal();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final jadwal = ref.read(jadwalProvider.notifier);
+    final jadwal = context.read<JadwalCubit>();
 
     return _Bagian<Acara>(
-      nilai: ref.watch(jadwalProvider),
+      nilai: context.watch<JadwalCubit>().state,
       kosong: 'Belum ada jadwal.',
       stikerKosong: JenisStiker.cal,
       skeleton: const SkeletonDaftar(sematan: true, baris: 3, tinggiBaris: 82),
-      onUlangi: () => ref.invalidate(jadwalProvider),
+      onUlangi: () => context.read<JadwalCubit>().muat(),
       atas: [
         TombolPutus(
           label: 'Tambah jadwal atau pengingat',
@@ -855,14 +838,14 @@ class _Jadwal extends ConsumerWidget {
 }
 
 /// Layar 21: Tambah jadwal.
-class _JadwalSheet extends ConsumerStatefulWidget {
+class _JadwalSheet extends StatefulWidget {
   const _JadwalSheet();
 
   @override
-  ConsumerState<_JadwalSheet> createState() => _JadwalSheetState();
+  State<_JadwalSheet> createState() => _JadwalSheetState();
 }
 
-class _JadwalSheetState extends ConsumerState<_JadwalSheet> {
+class _JadwalSheetState extends State<_JadwalSheet> {
   final _judul = TextEditingController();
   DateTime _tanggal = DateTime.now().add(const Duration(days: 1));
   String _jenis = BerduaEnums.eventTypes.first;
@@ -901,7 +884,7 @@ class _JadwalSheetState extends ConsumerState<_JadwalSheet> {
     });
 
     try {
-      await ref.read(jadwalProvider.notifier).tambah(
+      await context.read<JadwalCubit>().tambah(
         judul: _judul.text.trim(),
         tanggal: _tanggal,
         jenis: _jenis,
@@ -1006,14 +989,14 @@ class _JadwalSheetState extends ConsumerState<_JadwalSheet> {
 
 // --------------------------------------------------------------- layar 22
 
-class _Jurnal extends ConsumerStatefulWidget {
+class _Jurnal extends StatefulWidget {
   const _Jurnal();
 
   @override
-  ConsumerState<_Jurnal> createState() => _JurnalState();
+  State<_Jurnal> createState() => _JurnalState();
 }
 
-class _JurnalState extends ConsumerState<_Jurnal> {
+class _JurnalState extends State<_Jurnal> {
   final _teks = TextEditingController();
   bool _menyimpan = false;
 
@@ -1034,7 +1017,7 @@ class _JurnalState extends ConsumerState<_Jurnal> {
     setState(() => _menyimpan = true);
 
     try {
-      await ref.read(jurnalProvider.notifier).tulis(teks);
+      await context.read<JurnalCubit>().tulis(teks);
       _teks.clear();
       fokus.unfocus();
       tampilkanToastVia(messenger, 'Catatan disimpan');
@@ -1048,15 +1031,15 @@ class _JurnalState extends ConsumerState<_Jurnal> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final sesi = ref.watch(sesiProvider);
-    final jurnal = ref.read(jurnalProvider.notifier);
+    final sesi = context.watch<SesiCubit>().state;
+    final jurnal = context.read<JurnalCubit>();
 
     return _Bagian<CatatanJurnal>(
-      nilai: ref.watch(jurnalProvider),
+      nilai: context.watch<JurnalCubit>().state,
       kosong: 'Belum ada catatan.',
       stikerKosong: JenisStiker.note,
       skeleton: const SkeletonDaftar(sematan: true, baris: 2, tinggiBaris: 104),
-      onUlangi: () => ref.invalidate(jurnalProvider),
+      onUlangi: () => context.read<JurnalCubit>().muat(),
       atas: [
         TextField(
           controller: _teks,

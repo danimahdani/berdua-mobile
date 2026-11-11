@@ -1,22 +1,22 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import 'siklus_controller.dart';
+import 'siklus_cubit.dart';
 
 /// Layar 15: riwayat siklus dan gejala.
-class RiwayatSiklusScreen extends ConsumerWidget {
+class RiwayatSiklusScreen extends StatelessWidget {
   const RiwayatSiklusScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final riwayat = ref.watch(riwayatSiklusProvider);
+  Widget build(BuildContext context) {
+    final riwayat = context.watch<RiwayatSiklusCubit>().state;
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -26,7 +26,7 @@ class RiwayatSiklusScreen extends ConsumerWidget {
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat riwayat.',
-          onUlangi: () => ref.invalidate(riwayatSiklusProvider),
+          onUlangi: () => context.read<RiwayatSiklusCubit>().muat(),
         ),
         data: (data) => LayarBerdua(
           judul: 'Riwayat siklus',

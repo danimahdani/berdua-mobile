@@ -1,6 +1,7 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
+import '../../core/muatan.dart';
 import '../../models/models.dart';
 
 /// Isi layar 06 dalam satu muatan, sesuai endpoint `GET /api/beranda`.
@@ -36,7 +37,8 @@ class Beranda {
           ? null
           : RingkasanSiklus.fromJson(json['siklus'] as Map<String, dynamic>),
       belanjaBelumDibeli:
-          (json['belanja'] as Map<String, dynamic>)['belum_dibeli'] as int? ?? 0,
+          (json['belanja'] as Map<String, dynamic>)['belum_dibeli'] as int? ??
+          0,
       todoTerbuka:
           (json['todo'] as Map<String, dynamic>)['terbuka'] as int? ?? 0,
       jadwalTerdekat: json['jadwal_terdekat'] == null
@@ -69,7 +71,9 @@ class Beranda {
   String get kalimatUtang {
     if (lunas) return 'Tidak ada utang';
 
-    return balance > 0 ? 'Kamu berutang ke pasangan' : 'Pasangan berutang ke kamu';
+    return balance > 0
+        ? 'Kamu berutang ke pasangan'
+        : 'Pasangan berutang ke kamu';
   }
 }
 
@@ -97,8 +101,8 @@ class RingkasanSiklus {
       hariSampaiHaid: json['days_until_next_period'] as int? ?? 0,
       rataRataPanjang: (json['average_length'] as num?)?.toDouble() ?? 0,
       teratur: json['is_regular'] as bool?,
-      gejalaHariIni:
-          (json['symptoms_today'] as List<dynamic>? ?? []).cast<String>(),
+      gejalaHariIni: (json['symptoms_today'] as List<dynamic>? ?? [])
+          .cast<String>(),
       disclaimer: json['disclaimer'] as String? ?? '',
     );
   }
@@ -171,24 +175,17 @@ class Tabungan {
   double get progres => target == 0 ? 0 : (collected / target).clamp(0.0, 1.0);
 }
 
-class BerandaController extends AsyncNotifier<Beranda> {
+/// Muatan layar 06. Cubit lain memanggil [segarkan] sesudah mengubah data
+/// yang ringkasannya tampil di beranda.
+class BerandaCubit extends MuatanCubit<Beranda> {
+  BerandaCubit(this._dio);
+
+  final Dio _dio;
+
   @override
-  Future<Beranda> build() async {
-    final data = await ref.read(dioProvider).send('GET', '/beranda');
+  Future<Beranda> ambil() async {
+    final data = await _dio.send('GET', '/beranda');
 
     return Beranda.fromJson(data);
   }
-
-  Future<void> segarkan() async {
-    // Sengaja TIDAK menyetel AsyncValue.loading() di sini: isi lama
-    // bertahan di layar selama permintaan berjalan, sehingga penambahan
-    // kecil tidak membuat seluruh daftar berkedip jadi kerangka.
-    // Kerangka hanya untuk pemuatan pertama; tombol yang menekan aksi
-    // sudah menampilkan indikatornya sendiri.
-    state = await AsyncValue.guard(build);
-  }
 }
-
-final berandaProvider = AsyncNotifierProvider<BerandaController, Beranda>(
-  BerandaController.new,
-);

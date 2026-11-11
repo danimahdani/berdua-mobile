@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import 'features/auth/auth_controller.dart';
+import 'features/auth/sesi_cubit.dart';
 import 'features/auth/masuk_screen.dart';
 import 'features/auth/onboarding_screen.dart';
 import 'features/beranda/beranda_screen.dart';
@@ -22,20 +24,29 @@ import 'widgets/skeleton.dart';
 /// §9: go_router dengan 5 tab bawah dan rute anak.
 final _rootKey = GlobalKey<NavigatorState>();
 
-final routerProvider = Provider<GoRouter>((ref) {
-  // Router ikut berubah begitu sesi berubah, sehingga pengalihan di bawah
-  // dijalankan ulang tanpa perlu navigasi manual dari layar.
-  final notifier = ValueNotifier(ref.read(sesiProvider));
+/// Menjalankan ulang pengalihan router tiap [SesiCubit] berubah, sehingga
+/// layar tidak perlu bernavigasi sendiri sesudah masuk atau keluar.
+class _PendengarSesi extends ChangeNotifier {
+  _PendengarSesi(SesiCubit sesi) {
+    _langganan = sesi.stream.listen((_) => notifyListeners());
+  }
 
-  ref.listen(sesiProvider, (_, next) => notifier.value = next);
-  ref.onDispose(notifier.dispose);
+  late final StreamSubscription<SesiState> _langganan;
 
+  @override
+  void dispose() {
+    _langganan.cancel();
+    super.dispose();
+  }
+}
+
+GoRouter _buatRouter(SesiCubit sesiCubit, Listenable pendengar) {
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/beranda',
-    refreshListenable: notifier,
+    refreshListenable: pendengar,
     redirect: (context, state) {
-      final sesi = ref.read(sesiProvider);
+      final sesi = sesiCubit.state;
 
       // Selama token lama diperiksa, jangan pindah ke mana pun.
       if (sesi.memuat) return '/memuat';
@@ -88,7 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         branches: [
           StatefulShellBranch(
             routes: [
-              GoRoute(path: '/beranda', builder: (_, _) => const BerandaScreen()),
+              GoRoute(
+                path: '/beranda',
+                builder: (_, _) => const BerandaScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -103,7 +117,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              GoRoute(path: '/bersama', builder: (_, _) => const BersamaScreen()),
+              GoRoute(
+                path: '/bersama',
+                builder: (_, _) => const BersamaScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -115,18 +132,44 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
-});
+}
 
-class BerduaApp extends ConsumerWidget {
+/// Harus dipasang di bawah [PenyediaBerdua].
+class BerduaApp extends StatefulWidget {
   const BerduaApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  State<BerduaApp> createState() => _BerduaAppState();
+}
+
+class _BerduaAppState extends State<BerduaApp> {
+  late final _PendengarSesi _pendengar;
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final sesi = context.read<SesiCubit>();
+
+    _pendengar = _PendengarSesi(sesi);
+    _router = _buatRouter(sesi, _pendengar);
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _pendengar.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Berdua',
       debugShowCheckedModeBanner: false,
       theme: BerduaTheme.light(),
-      routerConfig: ref.watch(routerProvider),
+      routerConfig: _router,
     );
   }
 }

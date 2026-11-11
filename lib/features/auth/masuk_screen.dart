@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/hiasan_pasangan.dart';
-import 'auth_controller.dart';
+import 'sesi_cubit.dart';
 
 /// Layar 01 (Masuk) dan 02 (Kode verifikasi email).
 ///
 /// §5.1: masuk dengan nomor telepon, lalu kode 6 digit yang dikirim ke email
 /// yang terhubung dengan nomor itu. Hanya 2 nomor terdaftar yang bisa masuk.
-class MasukScreen extends ConsumerStatefulWidget {
+class MasukScreen extends StatefulWidget {
   const MasukScreen({super.key});
 
   @override
-  ConsumerState<MasukScreen> createState() => _MasukScreenState();
+  State<MasukScreen> createState() => _MasukScreenState();
 }
 
-class _MasukScreenState extends ConsumerState<MasukScreen> {
+class _MasukScreenState extends State<MasukScreen> {
   final _nomor = TextEditingController();
   final _kode = TextEditingController();
 
@@ -48,9 +48,9 @@ class _MasukScreenState extends ConsumerState<MasukScreen> {
     });
 
     try {
-      final hasil = await ref
-          .read(sesiProvider.notifier)
-          .mintaKode('+62${_nomor.text.trim()}');
+      final hasil = await context.read<SesiCubit>().mintaKode(
+        '+62${_nomor.text.trim()}',
+      );
 
       if (!mounted) return;
 
@@ -80,9 +80,10 @@ class _MasukScreenState extends ConsumerState<MasukScreen> {
     });
 
     try {
-      await ref
-          .read(sesiProvider.notifier)
-          .verifikasi('+62${_nomor.text.trim()}', _kode.text.trim());
+      await context.read<SesiCubit>().verifikasi(
+        '+62${_nomor.text.trim()}',
+        _kode.text.trim(),
+      );
       // Router otomatis berpindah begitu sesi terisi.
     } on ApiException catch (error) {
       if (mounted) setState(() => _galat = error.message);

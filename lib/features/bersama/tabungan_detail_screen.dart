@@ -1,37 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../auth/auth_controller.dart';
-import 'bersama_controller.dart';
+import '../auth/sesi_cubit.dart';
+import 'bersama_cubit.dart';
 
 /// Layar 19: Detail tabungan — progres, sisa, kebutuhan per bulan, kontribusi
 /// masing-masing, dan riwayat setoran (§5.4).
-class TabunganDetailScreen extends ConsumerWidget {
+class TabunganDetailScreen extends StatelessWidget {
   const TabunganDetailScreen({super.key, required this.goalId});
 
   final int goalId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detail = ref.watch(detailTabunganProvider(goalId));
+  Widget build(BuildContext context) {
+    // Tiap target punya cubitnya sendiri, hidup selama layar ini terbuka.
+    return BlocProvider(
+      create: (context) => DetailTabunganCubit(context.read(), goalId),
+      child: _LayarDetail(goalId: goalId),
+    );
+  }
+}
+
+class _LayarDetail extends StatelessWidget {
+  const _LayarDetail({required this.goalId});
+
+  final int goalId;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = context.watch<DetailTabunganCubit>().state;
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
       body: detail.when(
-        skipLoadingOnReload: true,
-        skipLoadingOnRefresh: true,
         loading: () => const SkeletonTabunganDetail(),
         error: (error, _) => GalatLayar(
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat tabungan.',
-          onUlangi: () => ref.invalidate(detailTabunganProvider(goalId)),
+          onUlangi: () => context.read<DetailTabunganCubit>().muat(),
         ),
         data: (goal) => LayarBerdua(
           judul: goal.title,
@@ -169,16 +182,16 @@ class _Ubin extends StatelessWidget {
 }
 
 /// Kartu setor: tiga nominal cepat, isian nominal lain, lalu tombolnya.
-class _KartuSetor extends ConsumerStatefulWidget {
+class _KartuSetor extends StatefulWidget {
   const _KartuSetor({required this.goalId});
 
   final int goalId;
 
   @override
-  ConsumerState<_KartuSetor> createState() => _KartuSetorState();
+  State<_KartuSetor> createState() => _KartuSetorState();
 }
 
-class _KartuSetorState extends ConsumerState<_KartuSetor> {
+class _KartuSetorState extends State<_KartuSetor> {
   static const _cepat = [100000, 250000, 500000];
 
   final _lain = TextEditingController();
@@ -201,13 +214,14 @@ class _KartuSetorState extends ConsumerState<_KartuSetor> {
 
     final messenger = ScaffoldMessenger.of(context);
     final fokus = FocusScope.of(context);
+    final tabungan = context.read<TabunganCubit>();
+    final detail = context.read<DetailTabunganCubit>();
 
     setState(() => _menyimpan = true);
 
     try {
-      await ref
-          .read(tabunganProvider.notifier)
-          .setor(goalId: widget.goalId, jumlah: jumlah);
+      await tabungan.setor(goalId: widget.goalId, jumlah: jumlah);
+      await detail.segarkan();
 
       _lain.clear();
       fokus.unfocus();
@@ -284,15 +298,15 @@ class _KartuSetorState extends ConsumerState<_KartuSetor> {
   }
 }
 
-class _Kontribusi extends ConsumerWidget {
+class _Kontribusi extends StatelessWidget {
   const _Kontribusi({required this.goal});
 
   final TargetTabungan goal;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final sesi = ref.watch(sesiProvider);
+    final sesi = context.watch<SesiCubit>().state;
 
     // Warna peran §12, bukan urutan besar-kecil.
     bool pencatat(int userId) => userId == sesi.user?.id
@@ -306,7 +320,10 @@ class _Kontribusi extends ConsumerWidget {
 
     // Riwayat hanya membawa nama, jadi warnanya dicari lewat kontribusi.
     final idMenurutNama = {for (final k in goal.kontribusi) k.name: k.userId};
-    final total = goal.kontribusi.fold<int>(0, (jumlah, k) => jumlah + k.amount);
+    final total = goal.kontribusi.fold<int>(
+      0,
+      (jumlah, k) => jumlah + k.amount,
+    );
 
     return KartuBerdua(
       radius: Radii.cardBesar,

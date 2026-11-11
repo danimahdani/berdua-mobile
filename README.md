@@ -143,9 +143,11 @@ supaya isinya tinggal mengisi kerangka, bukan melompat.
 Tiga aturan yang dipegang:
 
 1. **Kerangka hanya untuk pemuatan pertama.** Saat menyegarkan setelah aksi
-   (menambah barang, mencentang tugas), isi lama dibiarkan di layar. Controller
-   sengaja tidak menyetel `AsyncValue.loading()` di `_segarkan()`; kalau
-   disetel, penambahan sekecil apa pun membuat seluruh daftar berkedip.
+   (menambah barang, mencentang tugas), isi lama dibiarkan di layar.
+   `MuatanCubit.segarkan()` (`lib/core/muatan.dart`) sengaja tidak memancarkan
+   `Muatan.memuat()`; hanya `muat()` — pemuatan pertama dan "Coba lagi" — yang
+   melakukannya. Kalau tidak, penambahan sekecil apa pun membuat seluruh
+   daftar berkedip.
 2. **Aksi pada elemen yang sudah terlihat memakai indikator di elemen itu**,
    bukan kerangka. `TombolUtama(memuat: true)` menampilkan spinner di tempat
    labelnya — itu satu-satunya `CircularProgressIndicator` yang tersisa.

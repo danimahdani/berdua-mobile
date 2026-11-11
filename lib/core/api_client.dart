@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'env.dart';
@@ -24,13 +23,9 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-final secureStorageProvider = Provider<FlutterSecureStorage>(
-  (ref) => const FlutterSecureStorage(),
-);
-
 /// Token Sanctum disimpan terenkripsi, bukan di SharedPreferences.
 class TokenStore {
-  TokenStore(this._storage);
+  TokenStore([this._storage = const FlutterSecureStorage()]);
 
   static const _key = 'berdua_token';
 
@@ -52,13 +47,9 @@ class TokenStore {
   }
 }
 
-final tokenStoreProvider = Provider<TokenStore>(
-  (ref) => TokenStore(ref.watch(secureStorageProvider)),
-);
-
-final dioProvider = Provider<Dio>((ref) {
-  final tokens = ref.watch(tokenStoreProvider);
-
+/// Klien HTTP bersama. Disediakan sekali lewat `RepositoryProvider<Dio>`
+/// di [PenyediaBerdua], lalu dipakai semua cubit.
+Dio buatDio(TokenStore tokens) {
   final dio = Dio(
     BaseOptions(
       baseUrl: Env.apiBaseUrl,
@@ -122,7 +113,7 @@ final dioProvider = Provider<Dio>((ref) {
   );
 
   return dio;
-});
+}
 
 ApiException _mapError(Response<dynamic> response) {
   final data = response.data;
@@ -142,16 +133,13 @@ ApiException _mapError(Response<dynamic> response) {
     });
   }
 
-  final message = data['message'] as String? ??
+  final message =
+      data['message'] as String? ??
       (fieldErrors.isNotEmpty
           ? fieldErrors.values.first
           : 'Terjadi kesalahan.');
 
-  return ApiException(
-    message,
-    statusCode: status,
-    fieldErrors: fieldErrors,
-  );
+  return ApiException(message, statusCode: status, fieldErrors: fieldErrors);
 }
 
 String _networkMessage(DioException error) {

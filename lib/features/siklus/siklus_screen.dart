@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
@@ -7,29 +7,27 @@ import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../auth/auth_controller.dart';
-import 'siklus_controller.dart';
+import '../auth/sesi_cubit.dart';
+import 'siklus_cubit.dart';
 
 /// Layar 13 (tampilan pencatat) dan 14 (tampilan pasangan).
 ///
 /// Satu layar untuk keduanya: yang membedakan hanya `bisaUbah` dan kehadiran
 /// tips dukungan, persis seperti aturan §5.3.
-class SiklusScreen extends ConsumerWidget {
+class SiklusScreen extends StatelessWidget {
   const SiklusScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final siklus = ref.watch(siklusProvider);
+  Widget build(BuildContext context) {
+    final siklus = context.watch<SiklusCubit>().state;
 
     return Scaffold(
       body: siklus.when(
-        skipLoadingOnReload: true,
-        skipLoadingOnRefresh: true,
         loading: () => const SkeletonSiklus(),
         error: (error, _) => GalatLayar(
           tab: 2,
           pesan: error is ApiException ? error.message : 'Gagal memuat siklus.',
-          onUlangi: () => ref.invalidate(siklusProvider),
+          onUlangi: () => context.read<SiklusCubit>().muat(),
         ),
         data: (data) => _Isi(data: data),
       ),
@@ -37,19 +35,19 @@ class SiklusScreen extends ConsumerWidget {
   }
 }
 
-class _Isi extends ConsumerWidget {
+class _Isi extends StatelessWidget {
   const _Isi({required this.data});
 
   final Siklus data;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final sesi = ref.watch(sesiProvider);
+    final sesi = context.watch<SesiCubit>().state;
     final pencatat = sesi.user?.tracksCycle ?? false;
     final nama = data.ownerName.isEmpty ? 'Pasanganmu' : data.ownerName;
 
-    Future<void> segarkan() => ref.refresh(siklusProvider.future);
+    Future<void> segarkan() => context.read<SiklusCubit>().segarkan();
 
     // Belum ada catatan sama sekali.
     if (!data.tercatat) {
@@ -533,17 +531,17 @@ class _TautanRiwayat extends StatelessWidget {
   }
 }
 
-class _KartuGejala extends ConsumerStatefulWidget {
+class _KartuGejala extends StatefulWidget {
   const _KartuGejala({required this.terpilih, required this.catatan});
 
   final List<String> terpilih;
   final String catatan;
 
   @override
-  ConsumerState<_KartuGejala> createState() => _KartuGejalaState();
+  State<_KartuGejala> createState() => _KartuGejalaState();
 }
 
-class _KartuGejalaState extends ConsumerState<_KartuGejala> {
+class _KartuGejalaState extends State<_KartuGejala> {
   late Set<String> _dipilih = widget.terpilih.toSet();
   bool _menyimpan = false;
 
@@ -562,7 +560,7 @@ class _KartuGejalaState extends ConsumerState<_KartuGejala> {
     setState(() => _menyimpan = true);
 
     try {
-      await ref.read(siklusProvider.notifier).simpanGejala(_dipilih.toList());
+      await context.read<SiklusCubit>().simpanGejala(_dipilih.toList());
       tampilkanToastVia(messenger, 'Gejala disimpan');
     } on ApiException catch (error) {
       tampilkanToastVia(messenger, error.message);
@@ -632,14 +630,14 @@ class _KartuGejalaState extends ConsumerState<_KartuGejala> {
 bool _samaIsi(Set<String> a, Set<String> b) =>
     a.length == b.length && a.containsAll(b);
 
-class _TombolHaidMulai extends ConsumerStatefulWidget {
+class _TombolHaidMulai extends StatefulWidget {
   const _TombolHaidMulai();
 
   @override
-  ConsumerState<_TombolHaidMulai> createState() => _TombolHaidMulaiState();
+  State<_TombolHaidMulai> createState() => _TombolHaidMulaiState();
 }
 
-class _TombolHaidMulaiState extends ConsumerState<_TombolHaidMulai> {
+class _TombolHaidMulaiState extends State<_TombolHaidMulai> {
   bool _memuat = false;
 
   @override
@@ -654,7 +652,7 @@ class _TombolHaidMulaiState extends ConsumerState<_TombolHaidMulai> {
         setState(() => _memuat = true);
 
         try {
-          await ref.read(siklusProvider.notifier).tandaiHaidMulai();
+          await context.read<SiklusCubit>().tandaiHaidMulai();
           tampilkanToastVia(messenger, 'Tercatat. Prediksi diperbarui.');
         } on ApiException catch (error) {
           tampilkanToastVia(messenger, error.message);

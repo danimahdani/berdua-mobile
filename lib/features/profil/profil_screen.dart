@@ -2,37 +2,32 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
-import '../auth/auth_controller.dart';
+import '../auth/sesi_cubit.dart';
 
 /// Layar 23: Profil — pasangan, sakelar privasi dan pengingat, lalu keluar.
-class ProfilScreen extends ConsumerWidget {
+class ProfilScreen extends StatelessWidget {
   const ProfilScreen({super.key});
 
-  Future<void> _ubah(
-    BuildContext context,
-    WidgetRef ref,
-    String kunci,
-    bool nilai,
-  ) async {
+  Future<void> _ubah(BuildContext context, String kunci, bool nilai) async {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await ref.read(sesiProvider.notifier).ubahPengaturan(kunci, nilai);
+      await context.read<SesiCubit>().ubahPengaturan(kunci, nilai);
     } on ApiException catch (error) {
       tampilkanToastVia(messenger, error.message);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sesi = ref.watch(sesiProvider);
+  Widget build(BuildContext context) {
+    final sesi = context.watch<SesiCubit>().state;
     final text = Theme.of(context).textTheme;
     final user = sesi.user;
     final partner = sesi.partner;
@@ -120,7 +115,7 @@ class ProfilScreen extends ConsumerWidget {
               keterangan: 'Privasi',
               label: 'Bagikan siklus ke $namaPasangan',
               nyala: sesi.nyala('share_cycle'),
-              onUbah: (nilai) => _ubah(context, ref, 'share_cycle', nilai),
+              onUbah: (nilai) => _ubah(context, 'share_cycle', nilai),
             ),
             const SizedBox(height: Gap.betweenCards),
           ],
@@ -128,14 +123,14 @@ class ProfilScreen extends ConsumerWidget {
             keterangan: '2 hari sebelum prediksi',
             label: 'Pengingat haid',
             nyala: sesi.nyala('remind_period'),
-            onUbah: (nilai) => _ubah(context, ref, 'remind_period', nilai),
+            onUbah: (nilai) => _ubah(context, 'remind_period', nilai),
           ),
           const SizedBox(height: Gap.betweenCards),
           BarisSakelar(
             keterangan: 'Kos, listrik, langganan',
             label: 'Pengingat tagihan',
             nyala: sesi.nyala('remind_bills'),
-            onUbah: (nilai) => _ubah(context, ref, 'remind_bills', nilai),
+            onUbah: (nilai) => _ubah(context, 'remind_bills', nilai),
           ),
           const SizedBox(height: Gap.betweenCards),
 
@@ -145,7 +140,7 @@ class ProfilScreen extends ConsumerWidget {
             keterangan: 'Akun',
             label: 'Keluar',
             warna: BerduaColors.roseText,
-            onTap: () => ref.read(sesiProvider.notifier).keluar(),
+            onTap: () => context.read<SesiCubit>().keluar(),
           ),
         ],
       ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
@@ -9,35 +9,33 @@ import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/hiasan_pasangan.dart';
 import '../../widgets/skeleton.dart';
-import '../bersama/bersama_screen.dart';
+import '../bersama/bersama_cubit.dart';
 import '../money/tambah_pengeluaran_sheet.dart';
-import 'beranda_controller.dart';
+import 'beranda_cubit.dart';
 
 /// Layar 06: Beranda.
-class BerandaScreen extends ConsumerWidget {
+class BerandaScreen extends StatelessWidget {
   const BerandaScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final beranda = ref.watch(berandaProvider);
+  Widget build(BuildContext context) {
+    final beranda = context.watch<BerandaCubit>().state;
 
     return Scaffold(
-      floatingActionButton: beranda.hasValue
+      floatingActionButton: beranda.adaNilai
           ? FabBerdua(
               keterangan: 'Tambah pengeluaran',
               onTap: () => TambahPengeluaranSheet.buka(context),
             )
           : null,
       body: beranda.when(
-        skipLoadingOnRefresh: true,
-        skipLoadingOnReload: true,
         loading: () => const SkeletonBeranda(),
         error: (error, _) => GalatLayar(
           tab: 0,
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat beranda.',
-          onUlangi: () => ref.invalidate(berandaProvider),
+          onUlangi: () => context.read<BerandaCubit>().muat(),
         ),
         data: (data) => _Isi(data: data),
       ),
@@ -45,18 +43,18 @@ class BerandaScreen extends ConsumerWidget {
   }
 }
 
-class _Isi extends ConsumerWidget {
+class _Isi extends StatelessWidget {
   const _Isi({required this.data});
 
   final Beranda data;
 
-  void _keBersama(BuildContext context, WidgetRef ref, BagianBersama bagian) {
-    ref.read(bagianBersamaProvider.notifier).pilih(bagian);
+  void _keBersama(BuildContext context, BagianBersama bagian) {
+    context.read<BagianBersamaCubit>().pilih(bagian);
     context.go('/bersama');
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final user = data.user;
     final partner = data.partner;
@@ -66,7 +64,7 @@ class _Isi extends ConsumerWidget {
       judul: 'Beranda',
       tab: 0,
       ruangFab: true,
-      onSegarkan: () => ref.read(berandaProvider.notifier).segarkan(),
+      onSegarkan: () => context.read<BerandaCubit>().segarkan(),
       kepala: _BarisAtas(belumDibaca: data.notifikasiBelumDibaca),
       children: [
         const SizedBox(height: Gap.xs),
@@ -113,7 +111,7 @@ class _Isi extends ConsumerWidget {
                   keterangan: 'belum dibeli',
                   warna: BerduaColors.mintAngka,
                   stiker: JenisStiker.bag,
-                  onTap: () => _keBersama(context, ref, BagianBersama.belanja),
+                  onTap: () => _keBersama(context, BagianBersama.belanja),
                 ),
               ),
               const SizedBox(width: Gap.betweenCards),
@@ -124,7 +122,7 @@ class _Isi extends ConsumerWidget {
                   keterangan: 'tugas terbuka',
                   warna: BerduaColors.dindaText,
                   stiker: JenisStiker.check,
-                  onTap: () => _keBersama(context, ref, BagianBersama.todo),
+                  onTap: () => _keBersama(context, BagianBersama.todo),
                 ),
               ),
             ],
@@ -135,7 +133,7 @@ class _Isi extends ConsumerWidget {
           const SizedBox(height: Gap.xl),
           _KartuJadwal(
             jadwal: data.jadwalTerdekat!,
-            onTap: () => _keBersama(context, ref, BagianBersama.jadwal),
+            onTap: () => _keBersama(context, BagianBersama.jadwal),
           ),
         ],
 
@@ -279,9 +277,9 @@ class _LabelKartu extends StatelessWidget {
               teks,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: BerduaColors.label,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: BerduaColors.label),
             ),
           ),
         ),

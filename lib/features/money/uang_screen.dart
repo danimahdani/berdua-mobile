@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
@@ -8,21 +8,21 @@ import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../auth/auth_controller.dart';
-import 'money_controller.dart';
+import '../auth/sesi_cubit.dart';
+import 'uang_cubit.dart';
 import 'tambah_pengeluaran_sheet.dart';
 
 /// Layar 08: Uang bersama.
-class UangScreen extends ConsumerWidget {
+class UangScreen extends StatelessWidget {
   const UangScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ringkasan = ref.watch(uangProvider);
-    final sesi = ref.watch(sesiProvider);
+  Widget build(BuildContext context) {
+    final ringkasan = context.watch<UangCubit>().state;
+    final sesi = context.watch<SesiCubit>().state;
 
     return Scaffold(
-      floatingActionButton: ringkasan.hasValue
+      floatingActionButton: ringkasan.adaNilai
           ? FabBerdua(
               keterangan: 'Tambah pengeluaran',
               onTap: () => TambahPengeluaranSheet.buka(context),
@@ -31,15 +31,13 @@ class UangScreen extends ConsumerWidget {
       body: ringkasan.when(
         // Isi lama bertahan saat filter berganti; hanya pemuatan pertama yang
         // memakai kerangka.
-        skipLoadingOnReload: true,
-        skipLoadingOnRefresh: true,
         loading: () => const SkeletonUang(),
         error: (error, _) => GalatLayar(
           tab: 1,
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat transaksi.',
-          onUlangi: () => ref.invalidate(uangProvider),
+          onUlangi: () => context.read<UangCubit>().muat(),
         ),
         data: (data) => _Isi(data: data, sesi: sesi),
       ),
@@ -47,16 +45,16 @@ class UangScreen extends ConsumerWidget {
   }
 }
 
-class _Isi extends ConsumerWidget {
+class _Isi extends StatelessWidget {
   const _Isi({required this.data, required this.sesi});
 
   final RingkasanUang data;
   final SesiState sesi;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final filter = ref.watch(filterUangProvider);
+    final filter = context.watch<FilterUangCubit>().state;
 
     // Segmen §16: Semua / nama masing-masing.
     final pilihan = <Pengguna?>[null, ?sesi.user, ?sesi.partner];
@@ -134,11 +132,9 @@ class _Isi extends ConsumerWidget {
             (user) => user?.id == filter.payerId,
             orElse: () => null,
           ),
-          label: (user) => user == null
-              ? 'Semua'
-              : (user.name.isEmpty ? 'Aku' : user.name),
-          onPilih: (user) =>
-              ref.read(filterUangProvider.notifier).pilih(user?.id),
+          label: (user) =>
+              user == null ? 'Semua' : (user.name.isEmpty ? 'Aku' : user.name),
+          onPilih: (user) => context.read<FilterUangCubit>().pilih(user?.id),
         ),
         const SizedBox(height: Gap.betweenCards),
         if (data.transaksi.isEmpty)
@@ -254,7 +250,7 @@ class _BarisTransaksi extends StatelessWidget {
 }
 
 /// Layar 10: detail transaksi, dengan jalur ubah dan hapus (§5.2).
-class _LembarDetail extends ConsumerStatefulWidget {
+class _LembarDetail extends StatefulWidget {
   const _LembarDetail({
     required this.transaksi,
     required this.sesi,
@@ -268,10 +264,10 @@ class _LembarDetail extends ConsumerStatefulWidget {
   final BuildContext induk;
 
   @override
-  ConsumerState<_LembarDetail> createState() => _LembarDetailState();
+  State<_LembarDetail> createState() => _LembarDetailState();
 }
 
-class _LembarDetailState extends ConsumerState<_LembarDetail> {
+class _LembarDetailState extends State<_LembarDetail> {
   bool _menghapus = false;
 
   Future<void> _hapus() async {
@@ -283,7 +279,7 @@ class _LembarDetailState extends ConsumerState<_LembarDetail> {
     setState(() => _menghapus = true);
 
     try {
-      await ref.read(uangProvider.notifier).hapus(widget.transaksi.id);
+      await context.read<UangCubit>().hapus(widget.transaksi.id);
 
       navigator.pop();
       tampilkanToastVia(messenger, 'Transaksi dihapus');
@@ -437,14 +433,14 @@ class _LembarDetailState extends ConsumerState<_LembarDetail> {
   }
 }
 
-class _TombolLunas extends ConsumerStatefulWidget {
+class _TombolLunas extends StatefulWidget {
   const _TombolLunas();
 
   @override
-  ConsumerState<_TombolLunas> createState() => _TombolLunasState();
+  State<_TombolLunas> createState() => _TombolLunasState();
 }
 
-class _TombolLunasState extends ConsumerState<_TombolLunas> {
+class _TombolLunasState extends State<_TombolLunas> {
   bool _memuat = false;
 
   @override
@@ -464,7 +460,7 @@ class _TombolLunasState extends ConsumerState<_TombolLunas> {
         setState(() => _memuat = true);
 
         try {
-          await ref.read(uangProvider.notifier).tandaiLunas();
+          await context.read<UangCubit>().tandaiLunas();
 
           tampilkanToastVia(messenger, 'Saldo kembali Rp 0');
         } on ApiException catch (error) {

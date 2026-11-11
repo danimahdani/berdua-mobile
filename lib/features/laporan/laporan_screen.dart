@@ -1,14 +1,14 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
-import '../auth/auth_controller.dart';
-import 'laporan_controller.dart';
+import '../auth/sesi_cubit.dart';
+import 'laporan_cubit.dart';
 
 /// Layar 12: Laporan bulanan.
 ///
@@ -16,26 +16,24 @@ import 'laporan_controller.dart';
 /// total = satu angka dengan cincin anggaran, pembagian pembayar = satu batang
 /// bersegmen dengan ubin bernilai, kategori = ubin bernilai (bukan warna
 /// saja), tren mingguan = garis (besaran sepanjang waktu).
-class LaporanScreen extends ConsumerWidget {
+class LaporanScreen extends StatelessWidget {
   const LaporanScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final laporan = ref.watch(laporanProvider);
-    final bulan = ref.watch(bulanLaporanProvider);
+  Widget build(BuildContext context) {
+    final laporan = context.watch<LaporanCubit>().state;
+    final bulan = context.watch<BulanLaporanCubit>().state;
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
       body: laporan.when(
         // Isi bulan sebelumnya bertahan selama bulan baru dimuat.
-        skipLoadingOnReload: true,
-        skipLoadingOnRefresh: true,
         loading: () => const SkeletonLaporan(),
         error: (error, _) => GalatLayar(
           pesan: error is ApiException
               ? error.message
               : 'Gagal memuat laporan.',
-          onUlangi: () => ref.invalidate(laporanProvider),
+          onUlangi: () => context.read<LaporanCubit>().muat(),
         ),
         data: (data) => LayarBerdua(
           judul: 'Laporan',
@@ -144,14 +142,14 @@ class _Kepala extends StatelessWidget {
 }
 
 /// Segmen bulan: sebelumnya, yang sedang dilihat, dan berikutnya kalau ada.
-class _PemilihBulan extends ConsumerWidget {
+class _PemilihBulan extends StatelessWidget {
   const _PemilihBulan({required this.bulan});
 
   final DateTime bulan;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(bulanLaporanProvider.notifier);
+  Widget build(BuildContext context) {
+    final controller = context.read<BulanLaporanCubit>();
     final lalu = DateTime(bulan.year, bulan.month - 1);
     final depan = DateTime(bulan.year, bulan.month + 1);
 
@@ -478,15 +476,15 @@ List<_Segmen> _segmenPembayar(Laporan data, SesiState sesi) {
 }
 
 /// Satu batang bersegmen: bagian dari satu keseluruhan, hanya 2-3 pihak.
-class _PembagianPembayar extends ConsumerWidget {
+class _PembagianPembayar extends StatelessWidget {
   const _PembagianPembayar({required this.data});
 
   final Laporan data;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final segmen = _segmenPembayar(data, ref.watch(sesiProvider));
+    final segmen = _segmenPembayar(data, context.watch<SesiCubit>().state);
 
     if (segmen.isEmpty) return const SizedBox.shrink();
 
@@ -962,15 +960,15 @@ class _TrenMingguan extends StatelessWidget {
 }
 
 /// Sorotan: beberapa kesimpulan yang dihitung dari angka laporan.
-class _Sorotan extends ConsumerWidget {
+class _Sorotan extends StatelessWidget {
   const _Sorotan({required this.data});
 
   final Laporan data;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final segmen = _segmenPembayar(data, ref.watch(sesiProvider));
+    final segmen = _segmenPembayar(data, context.watch<SesiCubit>().state);
     final baris =
         <
           ({
