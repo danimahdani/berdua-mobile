@@ -19,6 +19,7 @@ class Beranda {
     required this.jadwalTerdekat,
     required this.tabungan,
     required this.notifikasiBelumDibaca,
+    this.kuis,
   });
 
   factory Beranda.fromJson(Map<String, dynamic> json) {
@@ -48,6 +49,9 @@ class Beranda {
           ? null
           : Tabungan.fromJson(json['tabungan_utama'] as Map<String, dynamic>),
       notifikasiBelumDibaca: json['notifikasi_belum_dibaca'] as int? ?? 0,
+      kuis: json['kuis'] == null
+          ? null
+          : RingkasanKuis.fromJson(json['kuis'] as Map<String, dynamic>),
     );
   }
 
@@ -65,6 +69,9 @@ class Beranda {
   final Jadwal? jadwalTerdekat;
   final Tabungan? tabungan;
   final int notifikasiBelumDibaca;
+
+  /// Kuis hari ini; null kalau bank kuis di backend kosong.
+  final RingkasanKuis? kuis;
 
   bool get lunas => balance == 0;
 
@@ -120,6 +127,49 @@ class RingkasanSiklus {
   /// "Fase luteal" — fase datang dari backend dalam huruf kecil.
   String get faseLabel =>
       fase.isEmpty ? '' : 'Fase ${fase[0].toUpperCase()}${fase.substring(1)}';
+}
+
+/// Keadaan kuis hari ini untuk kartu "Kuis berdua".
+class RingkasanKuis {
+  const RingkasanKuis({
+    required this.title,
+    required this.total,
+    required this.done,
+    required this.partnerDone,
+    required this.same,
+  });
+
+  factory RingkasanKuis.fromJson(Map<String, dynamic> json) => RingkasanKuis(
+    title: json['title'] as String? ?? '',
+    total: json['total'] as int? ?? 5,
+    done: json['done'] as bool? ?? false,
+    partnerDone: json['partner_done'] as bool? ?? false,
+    same: json['same'] as int?,
+  );
+
+  final String title;
+  final int total;
+  final bool done;
+  final bool partnerDone;
+
+  /// Jumlah jawaban yang sama; null selama salah satu belum selesai.
+  final int? same;
+
+  /// Kalimat pada kartu beranda. [pasangan] adalah nama pasangan.
+  String catatan(String pasangan) {
+    if (done) {
+      return same == null
+          ? 'Jawabanmu sudah masuk. Menunggu $pasangan menjawab.'
+          : 'Kalian selaras di $same dari $total jawaban. '
+                'Lihat hasilnya dan obrolkan.';
+    }
+
+    return partnerDone
+        ? '$total pertanyaan ringan hari ini. $pasangan sudah menjawab, '
+              'giliranmu.'
+        : '$total pertanyaan ringan hari ini. Jawab dulu, lalu bandingkan '
+              'dengan $pasangan.';
+  }
 }
 
 class Jadwal {

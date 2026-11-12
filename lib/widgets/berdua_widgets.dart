@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'potret.dart';
 import 'stiker.dart';
 
 export 'stiker.dart';
@@ -345,10 +346,9 @@ class AngkaBerbingkai extends StatelessWidget {
         child: Text(
           teks,
           maxLines: 1,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            fontSize: ukuran,
-            height: 1.3,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineLarge?.copyWith(fontSize: ukuran, height: 1.3),
         ),
       ),
     );
@@ -466,7 +466,8 @@ class SegmenBerdua<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final sheet = gaya == GayaSegmen.sheet;
     final tinggi =
-        this.tinggi ?? (sheet ? 40.0 : (gaya == GayaSegmen.polos ? 36.0 : 38.0));
+        this.tinggi ??
+        (sheet ? 40.0 : (gaya == GayaSegmen.polos ? 36.0 : 38.0));
 
     Widget tombol(T item) {
       final aktif = item == terpilih;
@@ -693,6 +694,7 @@ class TombolUtama extends StatelessWidget {
     this.ukuranHuruf = 20,
     this.ikon,
     this.kapital = true,
+    this.putih = false,
   });
 
   final String label;
@@ -702,6 +704,10 @@ class TombolUtama extends StatelessWidget {
   final double ukuranHuruf;
   final IconData? ikon;
   final bool kapital;
+
+  /// true = varian putih untuk aksi kedua di samping tombol pink
+  /// ("RIWAYAT KUIS", "MAIN LAGI").
+  final bool putih;
 
   @override
   Widget build(BuildContext context) {
@@ -729,7 +735,11 @@ class TombolUtama extends StatelessWidget {
             transform: Matrix4.translationValues(0, ditekan ? 3 : 0, 0),
             decoration: BoxDecoration(
               color: aktif || memuat
-                  ? (ditekan ? BerduaColors.roseHover : BerduaColors.rose)
+                  ? (putih
+                        ? (ditekan ? BerduaColors.card2 : BerduaColors.card)
+                        : (ditekan
+                              ? BerduaColors.roseHover
+                              : BerduaColors.rose))
                   : BerduaColors.netral,
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: BerduaColors.ink, width: Sizes.garis),
@@ -1092,9 +1102,8 @@ class KepalaSheet extends StatelessWidget {
   }
 }
 
-/// Bingkai foto pasangan: persegi membulat tak beraturan yang sedikit miring.
-/// Ilustrasinya masih tempat kosong sampai ada gambar aslinya; sementara itu
-/// inisialnya yang tampil.
+/// Bingkai foto pasangan: persegi membulat tak beraturan yang sedikit miring,
+/// berisi ilustrasi potret.
 class BingkaiPasangan extends StatelessWidget {
   const BingkaiPasangan({
     super.key,
@@ -1103,7 +1112,7 @@ class BingkaiPasangan extends StatelessWidget {
     required this.tinggi,
     required this.derajat,
     this.nama,
-    this.inisial,
+    this.potret,
     this.kiri = true,
     this.bayangan,
   });
@@ -1116,7 +1125,7 @@ class BingkaiPasangan extends StatelessWidget {
   final double tinggi;
   final double derajat;
   final String? nama;
-  final String? inisial;
+  final JenisPotret? potret;
 
   /// Bentuk sudutnya bercermin antara bingkai kiri dan kanan.
   final bool kiri;
@@ -1143,6 +1152,8 @@ class BingkaiPasangan extends StatelessWidget {
       child: Container(
         width: lebar,
         height: tinggi,
+        // Potret dipotong mengikuti bentuk bingkai.
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: warna,
           borderRadius: radius,
@@ -1158,15 +1169,12 @@ class BingkaiPasangan extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (inisial != null)
-              Center(
-                child: Text(
-                  inisial!,
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontSize: tinggi * .36,
-                    color: BerduaColors.ink.withValues(alpha: .55),
-                  ),
-                ),
+            if (potret != null)
+              // Sedikit ke kanan-bawah supaya kepala tidak tertutup label nama.
+              Positioned(
+                left: (lebar - tinggi * .94) / 2 + (nama == null ? 0 : 10 * s),
+                top: tinggi * .1,
+                child: Potret(potret!, ukuran: tinggi * .94),
               ),
             if (nama != null && nama!.isNotEmpty)
               Positioned(
@@ -1379,7 +1387,8 @@ class _LayarBerduaState extends State<LayarBerdua> {
 
   @override
   Widget build(BuildContext context) {
-    final kepala = widget.kepala ??
+    final kepala =
+        widget.kepala ??
         KepalaLayar(
           judul: widget.judul,
           stiker: widget.stiker,
@@ -1420,7 +1429,6 @@ class _LayarBerduaState extends State<LayarBerdua> {
   }
 }
 
-
 // ---------------------------------------------------------------- tambahan
 
 /// FAB pink 60x60 radius 20 dengan bayangan pink lembut. Hanya di Beranda dan
@@ -1458,7 +1466,11 @@ class FabBerdua extends StatelessWidget {
 
 /// Tombol pink persegi 52x52 di samping input: "tambah barang".
 class TombolTambahKecil extends StatelessWidget {
-  const TombolTambahKecil({super.key, required this.onTap, this.memuat = false});
+  const TombolTambahKecil({
+    super.key,
+    required this.onTap,
+    this.memuat = false,
+  });
 
   final VoidCallback? onTap;
   final bool memuat;
@@ -1594,9 +1606,9 @@ class TeksGalat extends StatelessWidget {
       padding: const EdgeInsets.only(left: 6),
       child: Text(
         pesan,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: BerduaColors.roseText,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: BerduaColors.roseText),
       ),
     );
   }
@@ -1711,7 +1723,10 @@ class CincinSiklus extends StatelessWidget {
                     ),
                     Text(
                       'hari ke',
-                      style: text.bodySmall?.copyWith(fontSize: 11, height: 1.3),
+                      style: text.bodySmall?.copyWith(
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
@@ -1907,9 +1922,9 @@ class TombolPutus extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
               ),
             ],

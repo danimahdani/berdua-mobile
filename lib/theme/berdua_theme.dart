@@ -53,20 +53,26 @@ abstract final class BerduaTheme {
       // Tombol pink datar (tanpa garis): "TANDAI LUNAS", "SETOR", "Ubah".
       // Tombol utama bergaris dan berbayangan keras ada di `TombolUtama`.
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: BerduaColors.rose,
-          foregroundColor: BerduaColors.ink,
-          disabledBackgroundColor: BerduaColors.netral,
-          disabledForegroundColor: BerduaColors.textSecondary,
-          minimumSize: const Size.fromHeight(52),
-          elevation: 0,
-          textStyle: text.labelLarge?.copyWith(fontSize: 17, letterSpacing: .5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Radii.input),
-          ),
-        ).copyWith(
-          overlayColor: const WidgetStatePropertyAll(BerduaColors.roseHover),
-        ),
+        style:
+            ElevatedButton.styleFrom(
+              backgroundColor: BerduaColors.rose,
+              foregroundColor: BerduaColors.ink,
+              disabledBackgroundColor: BerduaColors.netral,
+              disabledForegroundColor: BerduaColors.textSecondary,
+              minimumSize: const Size.fromHeight(52),
+              elevation: 0,
+              textStyle: text.labelLarge?.copyWith(
+                fontSize: 17,
+                letterSpacing: .5,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Radii.input),
+              ),
+            ).copyWith(
+              overlayColor: const WidgetStatePropertyAll(
+                BerduaColors.roseHover,
+              ),
+            ),
       ),
       // Tombol sekunder putih bergaris tinta, radius 18.
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -165,9 +171,7 @@ abstract final class BerduaTheme {
         ),
         checkColor: const WidgetStatePropertyAll(Colors.white),
         side: const BorderSide(color: BerduaColors.garisCentang, width: 2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: BerduaColors.rose,

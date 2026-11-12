@@ -109,6 +109,10 @@ class _Isi extends StatelessWidget {
       children: [
         const SizedBox(height: Gap.sm),
         _KartuFase(data: data),
+        if (data.peluangHamil != null) ...[
+          const SizedBox(height: Gap.xl),
+          _KartuPeluang(data: data),
+        ],
         const SizedBox(height: Gap.xl),
         _Kalender(data: data),
         const SizedBox(height: Gap.xl),
@@ -284,6 +288,177 @@ class _KartuFase extends StatelessWidget {
   }
 }
 
+/// Warna tiap tingkat peluang. Tingkatnya selalu ikut ditulis sebagai teks,
+/// jadi warna hanya penguat.
+({Color latar, Color teks}) _warnaPeluang(PeluangHamil peluang) =>
+    switch (peluang) {
+      PeluangHamil.rendah => (
+        latar: BerduaColors.mintSoft,
+        teks: BerduaColors.mintText,
+      ),
+      PeluangHamil.sedang => (
+        latar: BerduaColors.kuningSoft,
+        teks: BerduaColors.kuningText,
+      ),
+      PeluangHamil.tinggi => (
+        latar: BerduaColors.roseSoft,
+        teks: BerduaColors.roseText,
+      ),
+    };
+
+/// "12–16 Nov" atau "28 Nov – 2 Des".
+String _rentang(DateTime mulai, DateTime selesai) =>
+    mulai.month == selesai.month && mulai.year == selesai.year
+    ? '${mulai.day}–${TanggalId.short(selesai)}'
+    : '${TanggalId.short(mulai)} – ${TanggalId.short(selesai)}';
+
+/// Kartu perkiraan peluang kehamilan hari ini, dengan masa subur terdekat.
+class _KartuPeluang extends StatelessWidget {
+  const _KartuPeluang({required this.data});
+
+  final Siklus data;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final peluang = data.peluangHamil!;
+    final warna = _warnaPeluang(peluang);
+    final mulai = data.masaSuburMulai;
+    final selesai = data.masaSuburSelesai;
+
+    final penjelasan = switch (peluang) {
+      PeluangHamil.tinggi =>
+        'Hari ini di dalam perkiraan masa subur. Peluang hamil paling besar '
+            'di hari-hari ini.',
+      PeluangHamil.sedang =>
+        'Hari ini dekat dengan perkiraan masa subur. Kehamilan masih mungkin '
+            'terjadi.',
+      PeluangHamil.rendah =>
+        'Hari ini di luar perkiraan masa subur. Peluangnya kecil, tetapi '
+            'tidak nol.',
+    };
+
+    // Seberapa bisa dipercaya perkiraannya, menurut riwayat yang ada.
+    final ketepatan = switch (data.teratur) {
+      false =>
+        'Siklus belum teratur, jadi perkiraan ini bisa meleset beberapa hari.',
+      null =>
+        'Riwayat siklus masih sedikit, jadi perkiraan ini belum begitu tepat.',
+      true => null,
+    };
+
+    String? masaSubur;
+
+    if (mulai != null && selesai != null) {
+      final kini = DateTime.now();
+      final hariIni = DateTime(kini.year, kini.month, kini.day);
+
+      masaSubur = mulai.isAfter(hariIni)
+          ? 'Masa subur berikutnya ±${_rentang(mulai, selesai)}'
+          : 'Masa subur ±${_rentang(mulai, selesai)}, sedang berlangsung';
+    }
+
+    return Semantics(
+      label: 'Peluang kehamilan hari ini ${peluang.label}. $penjelasan',
+      child: KartuBerdua(
+        radius: Radii.cardBesar,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Peluang kehamilan',
+                    style: text.titleMedium?.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Gap.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: warna.latar,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: BerduaColors.ink,
+                      width: Sizes.garis,
+                    ),
+                  ),
+                  child: Text(
+                    peluang.label,
+                    style: text.titleMedium?.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: warna.teks,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Gap.md),
+            // Tiga ruas: terisi sampai tingkat hari ini.
+            ExcludeSemantics(
+              child: Row(
+                children: [
+                  for (final tingkat in PeluangHamil.values) ...[
+                    if (tingkat.index > 0) const SizedBox(width: 6),
+                    Expanded(
+                      child: Container(
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: tingkat.index <= peluang.index
+                              ? warna.latar
+                              : BerduaColors.card,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: BerduaColors.ink,
+                            width: Sizes.garis,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: Gap.md),
+            Text(
+              penjelasan,
+              style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.45),
+            ),
+            if (masaSubur != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                masaSubur,
+                style: text.bodyMedium?.copyWith(
+                  fontSize: 15,
+                  height: 1.45,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            const SizedBox(height: Gap.md),
+            Text(
+              [
+                'Perkiraan dari kalender saja. Jangan dipakai sebagai alat '
+                    'kontrasepsi maupun kepastian untuk program hamil.',
+                ?ketepatan,
+              ].join(' '),
+              style: text.labelSmall?.copyWith(fontSize: 13, height: 1.45),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// §16: kalender sel 40 dp dengan warna fase.
 class _Kalender extends StatelessWidget {
   const _Kalender({required this.data});
@@ -402,28 +577,44 @@ class _SelHari extends StatelessWidget {
       _ => (Colors.transparent, BerduaColors.ink),
     };
 
+    final peluang = hari.peluangHamil;
+
     return Semantics(
       label:
           '${TanggalId.short(hari.tanggal)}, ${hari.fase}'
+          '${peluang == null ? "" : ", peluang hamil ${peluang.label.toLowerCase()}"}'
           '${hari.perkiraan ? ", perkiraan" : ""}'
           '${hari.hariIni ? ", hari ini" : ""}',
+      button: peluang != null,
       excludeSemantics: true,
-      child: Container(
-        height: Sizes.calendarCell,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: latar,
-          borderRadius: BorderRadius.circular(Radii.chip),
-          border: hari.hariIni
-              ? Border.all(color: BerduaColors.ink, width: 2)
-              : null,
-        ),
-        child: Text(
-          '${hari.tanggal.day}',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 15,
-            fontWeight: hari.hariIni ? FontWeight.w700 : FontWeight.w500,
-            color: warna,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Mengetuk tanggal menyebut fase dan peluang hamil hari itu.
+        onTap: peluang == null
+            ? null
+            : () => tampilkanToast(
+                context,
+                '${TanggalId.short(hari.tanggal)}: fase ${hari.fase}, '
+                'peluang hamil ${peluang.label.toLowerCase()}'
+                '${hari.perkiraan ? " (perkiraan)" : ""}',
+              ),
+        child: Container(
+          height: Sizes.calendarCell,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: latar,
+            borderRadius: BorderRadius.circular(Radii.chip),
+            border: hari.hariIni
+                ? Border.all(color: BerduaColors.ink, width: 2)
+                : null,
+          ),
+          child: Text(
+            '${hari.tanggal.day}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 15,
+              fontWeight: hari.hariIni ? FontWeight.w700 : FontWeight.w500,
+              color: warna,
+            ),
           ),
         ),
       ),

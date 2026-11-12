@@ -33,7 +33,8 @@ class Pengguna {
   final bool needsOnboarding;
 
   /// Huruf pertama untuk avatar (§16 kartu daftar).
-  String get initial => name.isEmpty ? '?' : name.characters.first.toUpperCase();
+  String get initial =>
+      name.isEmpty ? '?' : name.characters.first.toUpperCase();
 }
 
 /// §12: biru langit selalu pencatat siklus, lavender selalu pasangannya.
@@ -100,12 +101,13 @@ enum CaraPembagian {
   final String wire;
   final String label;
 
-  static CaraPembagian fromWire(String value) =>
-      values.firstWhere((e) => e.wire == value, orElse: () => CaraPembagian.equal);
+  static CaraPembagian fromWire(String value) => values.firstWhere(
+    (e) => e.wire == value,
+    orElse: () => CaraPembagian.equal,
+  );
 
   /// Hanya empat pilihan yang bisa dipilih pengguna; pelunasan dibuat backend.
-  static List<CaraPembagian> get pilihan =>
-      [equal, custom, solo, wallet];
+  static List<CaraPembagian> get pilihan => [equal, custom, solo, wallet];
 }
 
 class Transaksi {
@@ -210,6 +212,8 @@ class RingkasanUang {
   String get kalimatUtang {
     if (lunas) return 'Tidak ada utang';
 
-    return balance > 0 ? 'Kamu berutang ke pasangan' : 'Pasangan berutang ke kamu';
+    return balance > 0
+        ? 'Kamu berutang ke pasangan'
+        : 'Pasangan berutang ke kamu';
   }
 }

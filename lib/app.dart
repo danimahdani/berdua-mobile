@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/notifikasi_push.dart';
 import 'features/auth/sesi_cubit.dart';
 import 'features/auth/masuk_screen.dart';
 import 'features/auth/onboarding_screen.dart';
+import 'features/beranda/beranda_cubit.dart';
 import 'features/beranda/beranda_screen.dart';
 import 'features/bersama/bersama_screen.dart';
 import 'features/bersama/tabungan_detail_screen.dart';
+import 'features/kuis/kuis_cubit.dart';
+import 'features/kuis/kuis_screen.dart';
+import 'features/kuis/riwayat_kuis_screen.dart';
 import 'features/laporan/laporan_screen.dart';
 import 'features/money/uang_screen.dart';
 import 'features/notifikasi/notifikasi_screen.dart';
@@ -94,6 +99,23 @@ GoRouter _buatRouter(SesiCubit sesiCubit, Listenable pendengar) {
           goalId: int.parse(state.pathParameters['id']!),
         ),
       ),
+      // Kuis berdua: hari ini, riwayat, dan hasil satu kuis lama.
+      GoRoute(
+        path: '/kuis',
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => const KuisScreen(),
+      ),
+      GoRoute(
+        path: '/kuis/riwayat',
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => const RiwayatKuisScreen(),
+      ),
+      GoRoute(
+        path: '/kuis/sesi/:id',
+        parentNavigatorKey: _rootKey,
+        builder: (_, state) =>
+            HasilKuisScreen(sessionId: int.parse(state.pathParameters['id']!)),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => _Shell(shell: shell),
         branches: [
@@ -145,22 +167,94 @@ class BerduaApp extends StatefulWidget {
 class _BerduaAppState extends State<BerduaApp> {
   late final _PendengarSesi _pendengar;
   late final GoRouter _router;
+  late final SesiCubit _sesi;
+  late final NotifikasiPush _push;
+
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+  final _langganan = <StreamSubscription<dynamic>>[];
+
+  /// Rute dari notifikasi yang diketuk sebelum sesi siap (aplikasi baru
+  /// dibuka); dibuka begitu pengguna sudah di dalam.
+  String? _ruteTertunda;
 
   @override
   void initState() {
     super.initState();
 
-    final sesi = context.read<SesiCubit>();
+    _sesi = context.read<SesiCubit>();
+    _push = context.read<NotifikasiPush>();
 
-    _pendengar = _PendengarSesi(sesi);
-    _router = _buatRouter(sesi, _pendengar);
+    _pendengar = _PendengarSesi(_sesi);
+    _router = _buatRouter(_sesi, _pendengar);
+
+    _langganan
+      ..add(_sesi.stream.listen(_saatSesiBerubah))
+      ..add(_push.pesan.listen(_saatPesanMasuk))
+      ..add(_push.rute.listen(_bukaRute));
+
+    _saatSesiBerubah(_sesi.state);
   }
 
   @override
   void dispose() {
+    for (final langganan in _langganan) {
+      langganan.cancel();
+    }
+
     _router.dispose();
     _pendengar.dispose();
     super.dispose();
+  }
+
+  bool get _diDalam => _sesi.state.masuk && !_sesi.state.perluOnboarding;
+
+  /// Perangkat didaftarkan untuk push begitu pengguna sudah di dalam.
+  void _saatSesiBerubah(SesiState sesi) {
+    if (!_diDalam) return;
+
+    _push.mulai();
+
+    final rute = _ruteTertunda;
+
+    if (rute != null) {
+      _ruteTertunda = null;
+      // Sesudah frame ini, supaya pengalihan router ke beranda selesai dulu.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _bukaRute(rute));
+    }
+  }
+
+  /// Hanya rute yang dikenal yang dibuka dari notifikasi.
+  void _bukaRute(String rute) {
+    if (rute != '/kuis') return;
+
+    if (!_diDalam) {
+      _ruteTertunda = rute;
+
+      return;
+    }
+
+    // Isi kuis bisa sudah berubah sejak terakhir dimuat (pasangan menjawab).
+    context.read<KuisCubit>().segarkan();
+    _router.push(rute);
+  }
+
+  /// Aplikasi sedang terbuka: tampilkan sebagai toast dan perbarui kartunya.
+  void _saatPesanMasuk(PesanPush pesan) {
+    if (!_diDalam) return;
+
+    final messenger = _messenger.currentState;
+
+    if (messenger != null && pesan.judul.isNotEmpty) {
+      tampilkanToastVia(
+        messenger,
+        pesan.isi.isEmpty ? pesan.judul : '${pesan.judul}. ${pesan.isi}',
+      );
+    }
+
+    if (pesan.rute == '/kuis') {
+      context.read<BerandaCubit>().segarkan();
+      context.read<KuisCubit>().segarkan();
+    }
   }
 
   @override
@@ -168,6 +262,7 @@ class _BerduaAppState extends State<BerduaApp> {
     return MaterialApp.router(
       title: 'Berdua',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: _messenger,
       theme: BerduaTheme.light(),
       routerConfig: _router,
     );

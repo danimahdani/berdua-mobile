@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_client.dart';
+import '../../core/notifikasi_push.dart';
 import '../../models/models.dart';
 
 /// Keadaan sesi. Router membaca ini untuk memutuskan layar mana yang tampil:
@@ -24,7 +25,8 @@ class SesiState {
   /// Sakelar di layar Profil: `share_cycle`, `remind_period`, `remind_bills`.
   final Map<String, bool> pengaturan;
 
-  bool nyala(String kunci) => pengaturan[kunci] ?? false;
+  /// Pengingat kuis menyala sampai dimatikan; sakelar lain mati secara default.
+  bool nyala(String kunci) => pengaturan[kunci] ?? kunci == 'remind_quiz';
 
   /// true selama token lama sedang diperiksa saat aplikasi dibuka.
   final bool memuat;
@@ -65,6 +67,11 @@ Map<String, bool> _bacaPengaturan(Object? json) {
   return {
     for (final kunci in const ['share_cycle', 'remind_period', 'remind_bills'])
       kunci: json[kunci] == true || json[kunci] == 1,
+    // Menyala secara default: baris lama belum punya kolom ini.
+    'remind_quiz':
+        json['remind_quiz'] == null ||
+        json['remind_quiz'] == true ||
+        json['remind_quiz'] == 1,
   };
 }
 
@@ -75,12 +82,16 @@ class SesiCubit extends Cubit<SesiState> {
     this._tokens, {
     SesiState awal = const SesiState(),
     bool pulihkanSaatMulai = true,
+    this._push,
   }) : super(awal) {
     if (pulihkanSaatMulai) Future.microtask(pulihkan);
   }
 
   final Dio _dio;
   final TokenStore _tokens;
+
+  /// null di tes; di aplikasi, perangkat dilepas dari push saat keluar.
+  final NotifikasiPush? _push;
 
   /// Dipakai saat aplikasi dibuka: kalau masih ada token, langsung muat profil.
   Future<void> pulihkan() async {
@@ -212,6 +223,9 @@ class SesiCubit extends Cubit<SesiState> {
   }
 
   Future<void> keluar() async {
+    // Selagi token masih berlaku: perangkat ini berhenti menerima notifikasi.
+    await _push?.lepas();
+
     try {
       await _dio.send('POST', '/auth/logout');
     } on ApiException {

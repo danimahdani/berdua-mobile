@@ -20,10 +20,7 @@ void main() {
       MaterialApp(
         theme: BerduaTheme.light(),
         home: MediaQuery(
-          data: MediaQueryData(
-            size: ukuran,
-            disableAnimations: kurangiGerak,
-          ),
+          data: MediaQueryData(size: ukuran, disableAnimations: kurangiGerak),
           child: Scaffold(body: skeleton),
         ),
       ),
@@ -40,6 +37,8 @@ void main() {
     'notifikasi': const SkeletonNotifikasi(),
     'laporan': const SkeletonLaporan(),
     'detail tabungan': const SkeletonTabunganDetail(),
+    'kuis': const SkeletonKuis(),
+    'riwayat kuis': const SkeletonRiwayatKuis(),
     'daftar bersama': const SkeletonDaftar(),
     'pembuka': const SkeletonPembuka(),
   };
@@ -95,10 +94,7 @@ void main() {
   testWidgets('SkeletonDaftar menghormati jumlah dan tinggi baris', (
     tester,
   ) async {
-    await pasang(
-      tester,
-      const SkeletonDaftar(baris: 3, tinggiBaris: 120),
-    );
+    await pasang(tester, const SkeletonDaftar(baris: 3, tinggiBaris: 120));
 
     final kartu = tester
         .widgetList<SkeletonKartu>(find.byType(SkeletonKartu))

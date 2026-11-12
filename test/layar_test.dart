@@ -9,6 +9,8 @@ import 'package:berdua/features/beranda/beranda_screen.dart';
 import 'package:berdua/features/bersama/bersama_cubit.dart';
 import 'package:berdua/features/bersama/bersama_screen.dart';
 import 'package:berdua/features/bersama/tabungan_detail_screen.dart';
+import 'package:berdua/features/kuis/kuis_screen.dart';
+import 'package:berdua/features/kuis/riwayat_kuis_screen.dart';
 import 'package:berdua/features/laporan/laporan_screen.dart';
 import 'package:berdua/features/money/tambah_pengeluaran_sheet.dart';
 import 'package:berdua/features/money/uang_screen.dart';
@@ -98,7 +100,96 @@ Map<String, dynamic> _transaksi(int id, String split, int? payer) => {
   'partner_share': 604800,
 };
 
-Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
+/// Satu sesi kuis. [selesai] = pengguna ini sudah menjawab; [pasangan] =
+/// pasangannya juga sudah, sehingga jawaban bisa dibandingkan.
+Map<String, dynamic> _kuis({
+  int id = 7,
+  bool selesai = false,
+  bool pasangan = true,
+  DateTime? tanggal,
+}) {
+  const milikku = [1, 0, 0, 1, 2];
+  const miliknya = [1, 0, 2, 1, 0];
+  final terbuka = selesai && pasangan;
+
+  return {
+    'id': id,
+    'date': _tgl(tanggal ?? _hariIni),
+    'title': 'Hal-hal kecil tentang kita',
+    'total': 5,
+    'done': selesai,
+    'partner_done': pasangan,
+    'partner_name': 'Raka',
+    'same': terbuka ? 3 : null,
+    'questions': [
+      for (var i = 0; i < 5; i++)
+        {
+          'id': 100 + i,
+          'position': i + 1,
+          'category': 'Kebiasaan',
+          'color': const [
+            '#8fdcff',
+            '#c9b8ff',
+            '#7cf0c8',
+            '#ffd23f',
+            '#ff7fab',
+          ][i],
+          'text':
+              'Pertanyaan nomor ${i + 1} yang cukup panjang supaya turun ke '
+              'baris kedua di layar sempit?',
+          'options': const [
+            'Pilihan pertama',
+            'Pilihan kedua yang kalimatnya lebih panjang dari yang lain',
+            'Pilihan ketiga',
+            'Pilihan keempat',
+          ],
+          'talk': 'Apa yang membuat kalian memilih jawaban itu?',
+          'my_choice': selesai ? milikku[i] : null,
+          'partner_choice': terbuka ? miliknya[i] : null,
+          'same': terbuka ? milikku[i] == miliknya[i] : null,
+        },
+    ],
+  };
+}
+
+Map<String, dynamic> _jawaban(
+  String path, {
+  bool siklusPasangan = false,
+  bool kuisSelesai = false,
+  bool pasanganMenjawab = true,
+}) {
+  if (path.endsWith('/quiz/today') || path.endsWith('/quiz/today/answers')) {
+    return {'data': _kuis(selesai: kuisSelesai, pasangan: pasanganMenjawab)};
+  }
+
+  if (path.contains('/quiz/sessions/')) {
+    return {
+      'data': _kuis(
+        id: 3,
+        selesai: true,
+        tanggal: _hariIni.subtract(const Duration(days: 2)),
+      ),
+    };
+  }
+
+  if (path.endsWith('/quiz/history')) {
+    return {
+      'count': 3,
+      'average': 3.5,
+      'data': [
+        for (final (i, sama) in const [3, null, 4].indexed)
+          {
+            'id': 7 - i * 2,
+            'date': _tgl(_hariIni.subtract(Duration(days: i))),
+            'title': 'Hal-hal kecil tentang kita dan kebiasaan sehari-hari',
+            'total': 5,
+            'partner_done': sama != null,
+            'same': sama,
+          },
+      ],
+    };
+  }
+
   if (path.endsWith('/beranda')) {
     return {
       'user': _dinda,
@@ -131,6 +222,14 @@ Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
       },
       'tabungan_utama': _goal(1),
       'notifikasi_belum_dibaca': 120,
+      'kuis': {
+        'id': 7,
+        'title': 'Hal-hal kecil tentang kita',
+        'total': 5,
+        'done': kuisSelesai,
+        'partner_done': pasanganMenjawab,
+        'same': kuisSelesai && pasanganMenjawab ? 3 : null,
+      },
     };
   }
 
@@ -218,6 +317,11 @@ Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
       'average_period_length': 5,
       'is_regular': true,
       'cycles_recorded': 6,
+      'pregnancy_chance': 'rendah',
+      'fertile_window': {
+        'start': _tgl(_hariIni.add(const Duration(days: 18))),
+        'end': _tgl(_hariIni.add(const Duration(days: 22))),
+      },
       'symptoms_today': ['lelah', 'kram'],
       'calendar': [
         for (var i = 0; i < akhir; i++)
@@ -225,6 +329,12 @@ Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
             'date': _tgl(awal.add(Duration(days: i))),
             'phase': const ['haid', 'folikular', 'subur', 'luteal'][i ~/ 8],
             'day_of_cycle': i + 1,
+            'pregnancy_chance': const [
+              'rendah',
+              'sedang',
+              'tinggi',
+              'rendah',
+            ][i ~/ 8],
             'predicted': i > 20,
             'is_today': i + 1 == _hariIni.day,
           },
@@ -355,9 +465,20 @@ Map<String, dynamic> _jawaban(String path, {bool siklusPasangan = false}) {
 }
 
 class _Adaptor implements HttpClientAdapter {
-  _Adaptor({this.siklusPasangan = false});
+  _Adaptor({
+    this.siklusPasangan = false,
+    this.kuisSelesai = false,
+    this.pasanganMenjawab = true,
+  });
 
   final bool siklusPasangan;
+  final bool pasanganMenjawab;
+
+  /// Menyala setelah jawaban dikirim, seperti backend sungguhan.
+  bool kuisSelesai;
+
+  /// Isi permintaan PUT terakhir ke `/quiz/today/answers`.
+  Object? jawabanTerkirim;
 
   @override
   Future<ResponseBody> fetch(
@@ -365,8 +486,21 @@ class _Adaptor implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    if (options.method == 'PUT' &&
+        options.uri.path.endsWith('/quiz/today/answers')) {
+      kuisSelesai = true;
+      jawabanTerkirim = (options.data as Map)['answers'];
+    }
+
     return ResponseBody.fromString(
-      jsonEncode(_jawaban(options.uri.path, siklusPasangan: siklusPasangan)),
+      jsonEncode(
+        _jawaban(
+          options.uri.path,
+          siklusPasangan: siklusPasangan,
+          kuisSelesai: kuisSelesai,
+          pasanganMenjawab: pasanganMenjawab,
+        ),
+      ),
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -395,21 +529,31 @@ SesiCubit _sesiPalsu(Dio dio, {bool sebagaiPasangan = false}) => SesiCubit(
 void main() {
   setUpAll(() => initializeDateFormatting('id_ID'));
 
-  Future<void> pasang(
+  Future<_Adaptor> pasang(
     WidgetTester tester,
     Widget layar, {
     Size ukuran = const Size(411, 891),
     bool sebagaiPasangan = false,
+    bool kuisSelesai = false,
+    bool pasanganMenjawab = true,
   }) async {
     tester.view.physicalSize = ukuran;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
+    final adaptor = _Adaptor(
+      siklusPasangan: sebagaiPasangan,
+      kuisSelesai: kuisSelesai,
+      pasanganMenjawab: pasanganMenjawab,
+    );
     final dio = Dio(BaseOptions(baseUrl: 'http://uji.lokal/api'))
-      ..httpClientAdapter = _Adaptor(siklusPasangan: sebagaiPasangan);
+      ..httpClientAdapter = adaptor;
 
     await tester.pumpWidget(
       PenyediaBerdua(
+        // Kunci baru supaya pemasangan kedua dalam satu tes tidak mewarisi
+        // cubit dari pemasangan pertama.
+        key: UniqueKey(),
         dio: dio,
         sesi: (_) => _sesiPalsu(dio, sebagaiPasangan: sebagaiPasangan),
         child: MaterialApp(theme: BerduaTheme.light(), home: layar),
@@ -423,6 +567,8 @@ void main() {
     }
 
     await tester.pump(const Duration(seconds: 2));
+
+    return adaptor;
   }
 
   /// Menggulir sampai bawah supaya kartu yang dibangun malas ikut diperiksa.
@@ -434,6 +580,12 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.drag(daftar.first, const Offset(0, -500));
       await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    // Kartu di bawah lipatan bisa memulai permintaan baru saat dibangun
+    // (mis. jumlah riwayat kuis); beri waktu jawabannya datang.
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
     }
 
     await tester.pump(const Duration(seconds: 2));
@@ -450,6 +602,9 @@ void main() {
     'bersama': () => const BersamaScreen(),
     'detail tabungan': () => const TabunganDetailScreen(goalId: 1),
     'notifikasi': () => const NotifikasiScreen(),
+    'kuis': () => const KuisScreen(),
+    'riwayat kuis': () => const RiwayatKuisScreen(),
+    'hasil kuis lama': () => const HasilKuisScreen(sessionId: 3),
     'profil': () => const ProfilScreen(),
     'sheet tambah pengeluaran': () =>
         const Scaffold(body: TambahPengeluaranSheet()),
@@ -479,6 +634,77 @@ void main() {
         // Kartu tips ada di bawah lipatan; daftar membangunnya saat digulir.
         await gulirSampaiBawah(tester);
         expect(find.textContaining('Cara mendukung'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('kuis: hasil dan menunggu pasangan', (tester) async {
+        await pasang(
+          tester,
+          const KuisScreen(),
+          ukuran: ukuran,
+          kuisSelesai: true,
+        );
+        expect(find.text('3/5'), findsOneWidget);
+        await gulirSampaiBawah(tester);
+        expect(tester.takeException(), isNull);
+
+        await pasang(
+          tester,
+          const KuisScreen(),
+          ukuran: ukuran,
+          kuisSelesai: true,
+          pasanganMenjawab: false,
+        );
+        expect(find.text('Menunggu Raka'), findsOneWidget);
+        await gulirSampaiBawah(tester);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('kuis: menjawab lima pertanyaan', (tester) async {
+        final adaptor = await pasang(
+          tester,
+          const KuisScreen(),
+          ukuran: ukuran,
+        );
+
+        Future<void> ketuk(String teks) async {
+          // Daftarnya malas: tombol di bawah lipatan baru ada setelah digulir.
+          await tester.scrollUntilVisible(
+            find.text(teks),
+            120,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.ensureVisible(find.text(teks));
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.tap(find.text(teks));
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 2));
+        }
+
+        await ketuk('MULAI KUIS');
+        expect(find.text('1/5'), findsOneWidget);
+
+        // Tanpa pilihan, tombol lanjut hanya mengingatkan.
+        await ketuk('LANJUT');
+        expect(find.text('Pilih satu jawaban dulu'), findsOneWidget);
+        // Masih di soal pertama: pilihan soal itu belum berganti. (Baris
+        // progres bisa di luar layar sempit, jadi tidak diperiksa di sini.)
+        expect(find.text('LIHAT HASIL'), findsNothing);
+
+        for (var i = 0; i < 5; i++) {
+          await ketuk(i.isEven ? 'Pilihan ketiga' : 'Pilihan pertama');
+          await ketuk(i == 4 ? 'LIHAT HASIL' : 'LANJUT');
+          expect(tester.takeException(), isNull, reason: 'soal ${i + 1}');
+        }
+
+        for (var i = 0; i < 8; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        await tester.pump(const Duration(seconds: 2));
+
+        expect(adaptor.jawabanTerkirim, [2, 0, 2, 0, 2]);
+        expect(find.text('3/5'), findsOneWidget);
+        expect(find.text('Banyak yang sama, ada yang baru'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
 
@@ -524,6 +750,72 @@ void main() {
     expect(find.text('Rp 51.000'), findsOneWidget);
     expect(find.text('Raka berutang ke kamu'), findsOneWidget);
     expect(find.text('99+'), findsOneWidget);
+  });
+
+  testWidgets('beranda: kartu kuis mengikuti keadaan kuis hari ini', (
+    tester,
+  ) async {
+    await pasang(tester, const BerandaScreen());
+    await gulirSampaiBawah(tester);
+
+    expect(find.text('Main sekarang'), findsOneWidget);
+    expect(find.textContaining('Raka sudah menjawab, giliranmu'), findsOne);
+
+    await pasang(tester, const BerandaScreen(), kuisSelesai: true);
+    await gulirSampaiBawah(tester);
+
+    expect(find.text('Lihat hasil'), findsOneWidget);
+    expect(find.textContaining('selaras di 3 dari 5'), findsOne);
+  });
+
+  testWidgets('kuis: jawaban pasangan tidak tampil sebelum ia menjawab', (
+    tester,
+  ) async {
+    await pasang(
+      tester,
+      const KuisScreen(),
+      kuisSelesai: true,
+      pasanganMenjawab: false,
+    );
+    await gulirSampaiBawah(tester);
+
+    expect(find.text('Belum menjawab'), findsWidgets);
+    expect(find.text('Sama'), findsNothing);
+    expect(find.text('Beda'), findsNothing);
+    expect(find.textContaining('Obrolkan'), findsNothing);
+  });
+
+  testWidgets('siklus: peluang kehamilan tampil untuk pencatat dan pasangan', (
+    tester,
+  ) async {
+    for (final sebagaiPasangan in [false, true]) {
+      await pasang(
+        tester,
+        const SiklusScreen(),
+        sebagaiPasangan: sebagaiPasangan,
+      );
+
+      expect(find.text('Peluang kehamilan'), findsOneWidget);
+      expect(find.text('Rendah'), findsOneWidget);
+      expect(find.textContaining('tetapi tidak nol'), findsOneWidget);
+      expect(find.textContaining('Masa subur berikutnya'), findsOneWidget);
+      expect(find.textContaining('alat kontrasepsi'), findsWidgets);
+    }
+  });
+
+  testWidgets('siklus: mengetuk tanggal menyebut peluang hari itu', (
+    tester,
+  ) async {
+    await pasang(tester, const SiklusScreen());
+
+    // Tanggal 17 ada di ruas "subur" pada kalender tiruan.
+    await tester.ensureVisible(find.text('17'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('17'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.textContaining('peluang hamil tinggi'), findsOneWidget);
   });
 
   testWidgets('uang: mengetuk transaksi membuka detail', (tester) async {

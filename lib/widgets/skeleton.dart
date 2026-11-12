@@ -400,6 +400,57 @@ class SkeletonNotifikasi extends StatelessWidget {
   }
 }
 
+/// Layar kuis hari ini dan hasil kuis: kartu utama, lalu deretan kartu dan
+/// dua tombol.
+class SkeletonKuis extends StatelessWidget {
+  const SkeletonKuis({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonLayar(
+      kembali: true,
+      lebarJudul: 0.42,
+      children: [
+        const SkeletonKartu(tinggi: 190, warna: BerduaColors.kuningSoft),
+        const SizedBox(height: Gap.xl),
+        const SkeletonTeks(lebar: 0.3, tinggi: 16),
+        for (var i = 0; i < 3; i++) ...[
+          const SizedBox(height: 14),
+          const SkeletonKartu(tinggi: 72),
+        ],
+        const SizedBox(height: 14),
+        const SkeletonKartu(tinggi: 104, warna: BerduaColors.rakaSoft),
+        const SizedBox(height: 14),
+        const SkeletonBox(height: Sizes.primaryButton, radius: Radii.button),
+        const SizedBox(height: 14),
+        const SkeletonBox(height: Sizes.primaryButton, radius: Radii.button),
+      ],
+    );
+  }
+}
+
+/// Layar riwayat kuis.
+class SkeletonRiwayatKuis extends StatelessWidget {
+  const SkeletonRiwayatKuis({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonLayar(
+      kembali: true,
+      lebarJudul: 0.42,
+      children: [
+        const SkeletonKartu(tinggi: 200, warna: BerduaColors.rakaSoft),
+        for (var i = 0; i < 4; i++) ...[
+          const SizedBox(height: 14),
+          const SkeletonKartu(tinggi: 84),
+        ],
+        const SizedBox(height: 14),
+        const SkeletonBox(height: Sizes.primaryButton, radius: Radii.button),
+      ],
+    );
+  }
+}
+
 /// Layar 12.
 class SkeletonLaporan extends StatelessWidget {
   const SkeletonLaporan({super.key});

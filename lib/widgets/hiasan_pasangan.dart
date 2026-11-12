@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 import 'berdua_widgets.dart';
+import 'potret.dart';
 
 /// Dua bingkai pasangan yang saling bersandar, dengan hati di antaranya dan
 /// kilau kecil di sekitarnya. Dipakai di layar masuk dan di Beranda.
@@ -13,8 +14,8 @@ class HiasanPasangan extends StatelessWidget {
   const HiasanPasangan.masuk({super.key})
     : namaKiri = null,
       namaKanan = null,
-      inisialKiri = null,
-      inisialKanan = null,
+      potretKiri = JenisPotret.wanita,
+      potretKanan = JenisPotret.pria,
       warnaKiri = BerduaColors.dinda,
       warnaKanan = BerduaColors.raka,
       angka = null,
@@ -25,10 +26,10 @@ class HiasanPasangan extends StatelessWidget {
   const HiasanPasangan.beranda({
     super.key,
     required this.namaKiri,
-    required this.inisialKiri,
+    required this.potretKiri,
     required this.warnaKiri,
     this.namaKanan,
-    this.inisialKanan,
+    this.potretKanan,
     this.warnaKanan = BerduaColors.raka,
     this.angka,
     this.satuan,
@@ -36,8 +37,10 @@ class HiasanPasangan extends StatelessWidget {
 
   final String? namaKiri;
   final String? namaKanan;
-  final String? inisialKiri;
-  final String? inisialKanan;
+  final JenisPotret? potretKiri;
+
+  /// null selama belum terhubung dengan pasangan: bingkai kanan tidak tampil.
+  final JenisPotret? potretKanan;
   final Color warnaKiri;
   final Color warnaKanan;
 
@@ -79,11 +82,11 @@ class HiasanPasangan extends StatelessWidget {
                         tinggi: 130,
                         derajat: -5,
                         nama: namaKiri,
-                        inisial: inisialKiri,
+                        potret: potretKiri,
                         bayangan: bayangan(warnaKiri),
                       ),
                     ),
-                    if (inisialKanan != null)
+                    if (potretKanan != null)
                       Positioned(
                         left: 138,
                         top: 20,
@@ -93,7 +96,7 @@ class HiasanPasangan extends StatelessWidget {
                           tinggi: 126,
                           derajat: 4,
                           nama: namaKanan,
-                          inisial: inisialKanan,
+                          potret: potretKanan,
                           kiri: false,
                           bayangan: bayangan(warnaKanan),
                         ),
@@ -136,6 +139,7 @@ class HiasanPasangan extends StatelessWidget {
                         lebar: 130,
                         tinggi: 130,
                         derajat: -6,
+                        potret: JenisPotret.wanita,
                         bayangan: _bayanganBiru,
                       ),
                     ),
@@ -147,6 +151,7 @@ class HiasanPasangan extends StatelessWidget {
                         lebar: 130,
                         tinggi: 126,
                         derajat: 6,
+                        potret: JenisPotret.pria,
                         kiri: false,
                         bayangan: _bayanganUngu,
                       ),

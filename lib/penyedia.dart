@@ -3,9 +3,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/api_client.dart';
+import 'core/notifikasi_push.dart';
 import 'features/auth/sesi_cubit.dart';
 import 'features/beranda/beranda_cubit.dart';
 import 'features/bersama/bersama_cubit.dart';
+import 'features/kuis/kuis_cubit.dart';
 import 'features/laporan/laporan_cubit.dart';
 import 'features/money/uang_cubit.dart';
 import 'features/notifikasi/notifikasi_cubit.dart';
@@ -34,14 +36,21 @@ class PenyediaBerdua extends StatelessWidget {
         RepositoryProvider<Dio>(
           create: (context) => dio ?? buatDio(context.read<TokenStore>()),
         ),
+        // Malas: baru dibuat (dan menyentuh Firebase) saat aplikasi memakainya.
+        RepositoryProvider<NotifikasiPush>(
+          create: (context) => NotifikasiPush(context.read<Dio>()),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider<SesiCubit>(
             create:
                 sesi ??
-                (context) =>
-                    SesiCubit(context.read<Dio>(), context.read<TokenStore>()),
+                (context) => SesiCubit(
+                  context.read<Dio>(),
+                  context.read<TokenStore>(),
+                  push: context.read<NotifikasiPush>(),
+                ),
           ),
           BlocProvider(create: (context) => BerandaCubit(context.read())),
           BlocProvider(create: (_) => BagianBersamaCubit()),
@@ -74,6 +83,11 @@ class PenyediaBerdua extends StatelessWidget {
           BlocProvider(
             create: (context) =>
                 NotifikasiCubit(context.read(), context.read()),
+          ),
+          BlocProvider(create: (context) => RiwayatKuisCubit(context.read())),
+          BlocProvider(
+            create: (context) =>
+                KuisCubit(context.read(), context.read(), context.read()),
           ),
         ],
         child: child,

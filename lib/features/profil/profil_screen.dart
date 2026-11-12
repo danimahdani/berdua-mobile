@@ -9,6 +9,7 @@ import '../../core/rupiah.dart';
 import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
+import '../../widgets/potret.dart';
 import '../auth/sesi_cubit.dart';
 
 /// Layar 23: Profil — pasangan, sakelar privasi dan pengingat, lalu keluar.
@@ -133,6 +134,13 @@ class ProfilScreen extends StatelessWidget {
             onUbah: (nilai) => _ubah(context, 'remind_bills', nilai),
           ),
           const SizedBox(height: Gap.betweenCards),
+          BarisSakelar(
+            keterangan: 'Pagi, siang, malam selama belum diisi',
+            label: 'Ingatkan kuis',
+            nyala: sesi.nyala('remind_quiz'),
+            onUbah: (nilai) => _ubah(context, 'remind_quiz', nilai),
+          ),
+          const SizedBox(height: Gap.betweenCards),
 
           const _Baris(keterangan: 'Mata uang', label: 'Rupiah (Rp)'),
           const SizedBox(height: Gap.betweenCards),
@@ -148,7 +156,7 @@ class ProfilScreen extends StatelessWidget {
   }
 }
 
-/// Ubin inisial 64 dp: bentuknya tak beraturan dan sedikit miring, bercermin
+/// Ubin potret 64 dp: bentuknya tak beraturan dan sedikit miring, bercermin
 /// antara kiri dan kanan.
 class _Ubin extends StatelessWidget {
   const _Ubin({required this.user, required this.kiri});
@@ -158,34 +166,33 @@ class _Ubin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = kiri
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(30),
+            bottomRight: Radius.circular(20),
+            bottomLeft: Radius.circular(26),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(30),
+            topRight: Radius.circular(24),
+            bottomRight: Radius.circular(26),
+            bottomLeft: Radius.circular(20),
+          );
+
     return Transform.rotate(
       angle: (kiri ? -6 : 6) * math.pi / 180,
       child: Container(
         width: 64,
         height: 64,
-        alignment: Alignment.center,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: warnaPengguna(user).fill,
-          borderRadius: kiri
-              ? const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(30),
-                  bottomRight: Radius.circular(20),
-                  bottomLeft: Radius.circular(26),
-                )
-              : const BorderRadius.only(
-                  topLeft: Radius.circular(30),
-                  topRight: Radius.circular(24),
-                  bottomRight: Radius.circular(26),
-                  bottomLeft: Radius.circular(20),
-                ),
+          borderRadius: radius,
         ),
-        child: Text(
-          user.initial,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-          ),
+        child: Align(
+          alignment: const Alignment(0, 1),
+          child: Potret(potretPengguna(user), ukuran: 60),
         ),
       ),
     );

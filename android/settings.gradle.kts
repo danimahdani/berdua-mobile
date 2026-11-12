@@ -21,6 +21,8 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.0.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // Membaca android/app/google-services.json untuk Firebase (notifikasi push).
+    id("com.google.gms.google-services") version "4.6.0" apply false
 }
 
 include(":app")

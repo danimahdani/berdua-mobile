@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 
-/// Dua belas stiker ilustrasi Berdua v4. Bentuknya disalin dari prototipe
+/// Tiga belas stiker ilustrasi Berdua v4. Bentuknya disalin dari prototipe
 /// (kanvas 48x48, garis tinta 2,5 dengan ujung membulat).
 enum JenisStiker {
   coin,
@@ -19,6 +19,7 @@ enum JenisStiker {
   bell,
   note,
   chart,
+  quiz,
 }
 
 enum _Gerak { flip, pulse, wiggle, bounce, ring, float }
@@ -62,6 +63,7 @@ class _StikerState extends State<Stiker> with SingleTickerProviderStateMixin {
     JenisStiker.chart: 2600,
     JenisStiker.bell: 2400,
     JenisStiker.note: 2800,
+    JenisStiker.quiz: 2200,
   };
 
   static const _gerak = <JenisStiker, _Gerak>{
@@ -77,6 +79,7 @@ class _StikerState extends State<Stiker> with SingleTickerProviderStateMixin {
     JenisStiker.chart: _Gerak.bounce,
     JenisStiker.bell: _Gerak.ring,
     JenisStiker.note: _Gerak.wiggle,
+    JenisStiker.quiz: _Gerak.wiggle,
   };
 
   @override
@@ -175,18 +178,27 @@ class _StikerState extends State<Stiker> with SingleTickerProviderStateMixin {
 
         return Matrix4.diagonal3Values(s, s, 1);
       case _Gerak.bounce:
-        final y = _antara(
-          const [(0, 0), (.4, -7), (.55, 0), (.7, -2), (1, 0)],
-          t,
-        );
-        final sx = _antara(
-          const [(0, 1), (.4, .96), (.55, 1.06), (.7, 1), (1, 1)],
-          t,
-        );
-        final sy = _antara(
-          const [(0, 1), (.4, 1.05), (.55, .94), (.7, 1), (1, 1)],
-          t,
-        );
+        final y = _antara(const [
+          (0, 0),
+          (.4, -7),
+          (.55, 0),
+          (.7, -2),
+          (1, 0),
+        ], t);
+        final sx = _antara(const [
+          (0, 1),
+          (.4, .96),
+          (.55, 1.06),
+          (.7, 1),
+          (1, 1),
+        ], t);
+        final sy = _antara(const [
+          (0, 1),
+          (.4, 1.05),
+          (.55, .94),
+          (.7, 1),
+          (1, 1),
+        ], t);
 
         return Matrix4.translationValues(0, y, 0)
           ..multiply(Matrix4.diagonal3Values(sx, sy, 1));
@@ -195,18 +207,15 @@ class _StikerState extends State<Stiker> with SingleTickerProviderStateMixin {
 
         return Matrix4.rotationY(r * _derajat);
       case _Gerak.ring:
-        final r = _antara(
-          const [
-            (0, 0),
-            (.7, 0),
-            (.75, -14),
-            (.8, 12),
-            (.85, -9),
-            (.9, 6),
-            (1, 0),
-          ],
-          t,
-        );
+        final r = _antara(const [
+          (0, 0),
+          (.7, 0),
+          (.75, -14),
+          (.8, 12),
+          (.85, -9),
+          (.9, 6),
+          (1, 0),
+        ], t);
 
         return Matrix4.rotationZ(r * _derajat);
     }
@@ -260,14 +269,7 @@ class _StikerPainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y), r, garis());
     }
 
-    void kotak(
-      double x,
-      double y,
-      double w,
-      double h,
-      double r,
-      Color warna,
-    ) {
+    void kotak(double x, double y, double w, double h, double r, Color warna) {
       final rr = RRect.fromRectAndRadius(
         Rect.fromLTWH(x, y, w, h),
         Radius.circular(r),
@@ -476,6 +478,48 @@ class _StikerPainter extends CustomPainter {
         kotak(8, 24, 8, 16, 2, _biru);
         kotak(20, 12, 8, 28, 2, _pink);
         kotak(32, 18, 8, 22, 2, _kuning);
+      case JenisStiker.quiz:
+        // Balon percakapan ungu dengan ekor di kiri bawah dan tanda tanya.
+        const sudut = Radius.circular(4);
+
+        bentuk(
+          Path()
+            ..moveTo(8, 10)
+            ..lineTo(40, 10)
+            ..arcToPoint(const Offset(44, 14), radius: sudut)
+            ..lineTo(44, 32)
+            ..arcToPoint(const Offset(40, 36), radius: sudut)
+            ..lineTo(22, 36)
+            ..lineTo(13, 43)
+            ..lineTo(13, 36)
+            ..lineTo(8, 36)
+            ..arcToPoint(const Offset(4, 32), radius: sudut)
+            ..lineTo(4, 14)
+            ..arcToPoint(const Offset(8, 10), radius: sudut)
+            ..close(),
+          _ungu,
+        );
+
+        if (siluet == null) {
+          final teks = TextPainter(
+            text: const TextSpan(
+              text: '?',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+
+          teks.paint(
+            canvas,
+            Offset(24 - teks.width / 2, 23.5 - teks.height / 2),
+          );
+        }
     }
   }
 

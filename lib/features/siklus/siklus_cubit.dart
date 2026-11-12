@@ -4,6 +4,27 @@ import '../../core/api_client.dart';
 import '../../core/muatan.dart';
 import '../beranda/beranda_cubit.dart';
 
+/// Perkiraan peluang kehamilan dari kalender. Sengaja tiga tingkat, bukan
+/// persen, dan yang terendah "rendah", bukan "nol": ini bukan alat
+/// kontrasepsi (§5.3).
+enum PeluangHamil {
+  rendah('Rendah'),
+  sedang('Sedang'),
+  tinggi('Tinggi');
+
+  const PeluangHamil(this.label);
+
+  final String label;
+
+  /// null kalau backend belum mengirim nilainya.
+  static PeluangHamil? dariKawat(Object? nilai) => switch (nilai) {
+    'rendah' => rendah,
+    'sedang' => sedang,
+    'tinggi' => tinggi,
+    _ => null,
+  };
+}
+
 /// Satu sel kalender siklus (§16: sel 40 dp dengan warna fase).
 class HariSiklus {
   const HariSiklus({
@@ -12,6 +33,7 @@ class HariSiklus {
     required this.hariKe,
     required this.perkiraan,
     required this.hariIni,
+    this.peluangHamil,
   });
 
   factory HariSiklus.fromJson(Map<String, dynamic> json) => HariSiklus(
@@ -20,11 +42,13 @@ class HariSiklus {
     hariKe: json['day_of_cycle'] as int? ?? 0,
     perkiraan: json['predicted'] as bool? ?? false,
     hariIni: json['is_today'] as bool? ?? false,
+    peluangHamil: PeluangHamil.dariKawat(json['pregnancy_chance']),
   );
 
   final DateTime tanggal;
   final String fase;
   final int hariKe;
+  final PeluangHamil? peluangHamil;
 
   /// true = siklus hasil perkiraan, bukan yang sudah dicatat.
   final bool perkiraan;
@@ -71,6 +95,9 @@ class Siklus {
     this.tips,
     this.pesan = '',
     this.disclaimer = '',
+    this.peluangHamil,
+    this.masaSuburMulai,
+    this.masaSuburSelesai,
   });
 
   factory Siklus.fromJson(Map<String, dynamic> json) {
@@ -85,6 +112,8 @@ class Siklus {
         pesan: json['message'] as String? ?? '',
       );
     }
+
+    final masaSubur = json['fertile_window'] as Map<String, dynamic>?;
 
     return Siklus(
       tercatat: true,
@@ -108,8 +137,14 @@ class Siklus {
           ? null
           : TipsDukungan.fromJson(json['tips'] as Map<String, dynamic>),
       disclaimer: json['disclaimer'] as String? ?? '',
+      peluangHamil: PeluangHamil.dariKawat(json['pregnancy_chance']),
+      masaSuburMulai: _tanggal(masaSubur?['start']),
+      masaSuburSelesai: _tanggal(masaSubur?['end']),
     );
   }
+
+  static DateTime? _tanggal(Object? nilai) =>
+      nilai is String ? DateTime.tryParse(nilai) : null;
 
   final bool tercatat;
   final bool dibagikan;
@@ -127,6 +162,13 @@ class Siklus {
   final TipsDukungan? tips;
   final String pesan;
   final String disclaimer;
+
+  /// Perkiraan peluang kehamilan hari ini.
+  final PeluangHamil? peluangHamil;
+
+  /// Masa subur yang sedang berjalan atau yang berikutnya.
+  final DateTime? masaSuburMulai;
+  final DateTime? masaSuburSelesai;
 
   String get faseLabel =>
       fase.isEmpty ? '' : 'Fase ${fase[0].toUpperCase()}${fase.substring(1)}';

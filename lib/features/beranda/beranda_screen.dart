@@ -8,6 +8,7 @@ import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/hiasan_pasangan.dart';
+import '../../widgets/potret.dart';
 import '../../widgets/skeleton.dart';
 import '../bersama/bersama_cubit.dart';
 import '../money/tambah_pengeluaran_sheet.dart';
@@ -70,12 +71,12 @@ class _Isi extends StatelessWidget {
         const SizedBox(height: Gap.xs),
         HiasanPasangan.beranda(
           namaKiri: user.name.isEmpty ? 'Kamu' : user.name,
-          inisialKiri: user.initial,
+          potretKiri: potretPengguna(user),
           warnaKiri: warnaPengguna(user).fill,
           namaKanan: partner == null
               ? null
               : (partner.name.isEmpty ? 'Pasangan' : partner.name),
-          inisialKanan: partner?.initial,
+          potretKanan: partner == null ? null : potretPengguna(partner),
           warnaKanan: partner == null
               ? BerduaColors.raka
               : warnaPengguna(partner).fill,
@@ -134,6 +135,16 @@ class _Isi extends StatelessWidget {
           _KartuJadwal(
             jadwal: data.jadwalTerdekat!,
             onTap: () => _keBersama(context, BagianBersama.jadwal),
+          ),
+        ],
+
+        if (data.kuis != null) ...[
+          const SizedBox(height: Gap.xl),
+          _KartuKuis(
+            kuis: data.kuis!,
+            pasangan: partner == null || partner.name.isEmpty
+                ? 'pasangan'
+                : partner.name,
           ),
         ],
 
@@ -545,6 +556,73 @@ class _KartuJadwal extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Kartu kuning "Kuis berdua": ajakan bermain, atau hasil kalau sudah.
+class _KartuKuis extends StatelessWidget {
+  const _KartuKuis({required this.kuis, required this.pasangan});
+
+  final RingkasanKuis kuis;
+  final String pasangan;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final ajakan = kuis.done ? 'Lihat hasil' : 'Main sekarang';
+
+    return Semantics(
+      button: true,
+      label: 'Kuis berdua. ${kuis.catatan(pasangan)} $ajakan',
+      excludeSemantics: true,
+      child: KartuBerdua(
+        warna: BerduaColors.kuning,
+        radius: Radii.cardBesar,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        stiker: JenisStiker.quiz,
+        onTap: () => context.push('/kuis'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 44),
+              child: Text(
+                'Kuis berdua',
+                style: text.titleMedium?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              kuis.catatan(pasangan),
+              style: text.bodySmall?.copyWith(
+                fontSize: 14,
+                height: 1.45,
+                color: BerduaColors.teksDiWarna,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: BerduaColors.ink,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                ajakan,
+                style: text.titleMedium?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

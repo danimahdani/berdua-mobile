@@ -89,6 +89,12 @@ abstract final class BerduaColors {
   static const mintText = Color(0xFF0B6B4F);
   static const mintAngka = Color(0xFF14B884);
 
+  /// Mint terang untuk kartu soal dan label "Sama" pada kuis.
+  static const mintCerah = Color(0xFF7CF0C8);
+
+  /// Teks isi di atas kartu berwarna (kuning, pink, lavender).
+  static const teksDiWarna = Color(0xFF3A3450);
+
   /// Kotak centang yang belum dicentang dan teks yang dicoret.
   static const garisCentang = Color(0xFFCFC7D6);
   static const teksCoret = Color(0xFFB0AAB8);
@@ -246,20 +252,12 @@ abstract final class Shadows {
 
   /// FAB: 0 10 24 pink 30%.
   static const action = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x4DE2558F),
-      offset: Offset(0, 10),
-      blurRadius: 24,
-    ),
+    BoxShadow(color: Color(0x4DE2558F), offset: Offset(0, 10), blurRadius: 24),
   ];
 
   /// Toast: 0 12 30 ungu 18%.
   static const frame = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x2E5A3C78),
-      offset: Offset(0, 12),
-      blurRadius: 30,
-    ),
+    BoxShadow(color: Color(0x2E5A3C78), offset: Offset(0, 12), blurRadius: 30),
   ];
 }
 
