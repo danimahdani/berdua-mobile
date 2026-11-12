@@ -185,3 +185,8 @@ extension ApiCall on Dio {
     }
   }
 }
+
+/// Objek JSON sebagai peta. Backend PHP menuliskan peta KOSONG sebagai `[]`
+/// (daftar), bukan `{}`; itu dibaca sebagai peta kosong, bukan galat.
+Map<String, dynamic> petaJson(Object? nilai) =>
+    nilai is Map ? nilai.cast<String, dynamic>() : const {};

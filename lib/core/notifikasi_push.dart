@@ -4,8 +4,18 @@ import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'api_client.dart';
+
+/// Channel Android untuk semua pengingat. ID yang sama dipasang di
+/// AndroidManifest sebagai channel bawaan FCM.
+const _channel = AndroidNotificationChannel(
+  'berdua_pengingat',
+  'Pengingat',
+  description: 'Pengingat kuis dan kabar dari pasangan.',
+  importance: Importance.high,
+);
 
 /// Notifikasi yang datang saat aplikasi sedang terbuka. Android tidak
 /// menampilkannya di baki notifikasi, jadi aplikasi yang menampilkannya.
@@ -35,8 +45,10 @@ class NotifikasiPush {
   final _pesan = StreamController<PesanPush>.broadcast();
   final _rute = StreamController<String>.broadcast();
   final _langganan = <StreamSubscription<dynamic>>[];
+  final _lokal = FlutterLocalNotificationsPlugin();
 
   bool _berjalan = false;
+  int _nomor = 0;
   String? _token;
 
   /// Pesan yang datang selagi aplikasi terbuka.
@@ -59,6 +71,8 @@ class NotifikasiPush {
       // Android 13 ke atas menampilkan dialog izin; versi lama langsung lolos.
       await fcm.requestPermission();
 
+      await _siapkanLokal();
+
       // Sengaja masih memakai token FCM klasik: backend mengirim lewat
       // `message.token` di FCM HTTP v1. API pengganti (register/onRegistered)
       // memberi Firebase Installation ID, yang butuh cara kirim berbeda.
@@ -74,11 +88,15 @@ class NotifikasiPush {
 
             if (notifikasi == null) return;
 
+            final rute = pesan.data['route'] as String?;
+
+            _tampilkan(notifikasi.title, notifikasi.body, rute);
+
             _pesan.add(
               PesanPush(
                 judul: notifikasi.title ?? '',
                 isi: notifikasi.body ?? '',
-                rute: pesan.data['route'] as String?,
+                rute: rute,
               ),
             );
           }),
@@ -92,6 +110,51 @@ class NotifikasiPush {
     } catch (error) {
       _berjalan = false;
       debugPrint('Notifikasi push tidak aktif: $error');
+    }
+  }
+
+  /// Membuat channel dan menyiapkan notifikasi lokal. FCM tidak menampilkan
+  /// apa pun di baki selagi aplikasi terbuka, jadi kita yang memunculkannya.
+  Future<void> _siapkanLokal() async {
+    await _lokal.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+      onDidReceiveNotificationResponse: (respons) {
+        final rute = respons.payload;
+
+        if (rute != null && rute.isNotEmpty) _rute.add(rute);
+      },
+    );
+
+    await _lokal
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_channel);
+  }
+
+  Future<void> _tampilkan(String? judul, String? isi, String? rute) async {
+    if ((judul ?? '').isEmpty && (isi ?? '').isEmpty) return;
+
+    try {
+      await _lokal.show(
+        id: _nomor++,
+        title: judul,
+        body: isi,
+        payload: rute,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channel.id,
+            _channel.name,
+            channelDescription: _channel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Notifikasi tidak bisa ditampilkan: $error');
     }
   }
 

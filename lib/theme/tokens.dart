@@ -281,6 +281,11 @@ abstract final class BerduaEnums {
     'sakit kepala',
     'jerawat',
     'ngidam manis',
+    'nyeri punggung',
+    'pusing',
+    'mual',
+    'nyeri payudara',
+    'susah tidur',
   ];
 
   static const eventTypes = <String>[

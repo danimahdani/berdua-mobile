@@ -8,6 +8,8 @@ import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
 import '../auth/sesi_cubit.dart';
+import 'catatan_hari_cubit.dart';
+import 'katalog_catatan.dart';
 import 'siklus_cubit.dart';
 
 /// Layar 13 (tampilan pencatat) dan 14 (tampilan pasangan).
@@ -120,14 +122,12 @@ class _Isi extends StatelessWidget {
 
         if (data.bisaUbah) ...[
           const SizedBox(height: Gap.xl),
-          _KartuGejala(
-            terpilih: data.gejalaHariIni,
+          _KartuCatatanHariIni(
+            gejala: data.gejalaHariIni,
             catatan: sesi.partner == null
-                ? 'Hanya kamu yang melihat catatan ini.'
-                : (sesi.nyala('share_cycle')
-                      ? 'Dibagikan ke $namaPasangan. Bisa dimatikan di Profil.'
-                      : 'Hanya kamu yang melihat. $namaPasangan tidak melihat '
-                            'siklusmu.'),
+                ? 'Hanya kamu yang melihat catatan harian ini.'
+                : 'Hanya kamu yang melihat catatan harian. $namaPasangan '
+                      'tidak melihatnya, juga saat siklus dibagikan.',
           ),
           const SizedBox(height: Gap.lg),
           const _TombolHaidMulai(),
@@ -459,32 +459,73 @@ class _KartuPeluang extends StatelessWidget {
   }
 }
 
-/// §16: kalender sel 40 dp dengan warna fase.
-class _Kalender extends StatelessWidget {
+/// §16: kalender sel 40 dp dengan warna fase. Mengetuk tanggal memilihnya:
+/// rinciannya tampil di bawah kalender, dan pencatat bisa membuka catatan
+/// harian tanggal itu.
+class _Kalender extends StatefulWidget {
   const _Kalender({required this.data});
 
   final Siklus data;
 
+  @override
+  State<_Kalender> createState() => _KalenderState();
+}
+
+class _KalenderState extends State<_Kalender> {
   static const _namaHari = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+
+  /// Tanggal yang diketuk; null = hari ini (kalau ada di bulan ini).
+  DateTime? _dipilih;
+
+  /// true selama bulan lain sedang dimuat.
+  bool _memuat = false;
+
+  @override
+  void didUpdateWidget(_Kalender lama) {
+    super.didUpdateWidget(lama);
+
+    // Bulan berganti: pilihan lama tidak lagi ada di kalender.
+    if (lama.data.bulan != widget.data.bulan) _dipilih = null;
+  }
+
+  Future<void> _geser(DateTime acuan, int bulan) async {
+    setState(() => _memuat = true);
+
+    await context.read<SiklusCubit>().gantiBulan(
+      DateTime(acuan.year, acuan.month + bulan),
+    );
+
+    if (mounted) setState(() => _memuat = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final data = widget.data;
     final hari = data.kalender;
 
     if (hari.isEmpty) return const SizedBox.shrink();
+
+    final acuan = data.bulan ?? hari.first.tanggal;
+
+    HariSiklus? terpilih;
+
+    for (final h in hari) {
+      if (_dipilih == null ? h.hariIni : h.tanggal == _dipilih) terpilih = h;
+    }
 
     // Senin = 1 pada DateTime.weekday, jadi sel kosong di awal bulan dihitung
     // langsung dari hari pertama.
     final kosong = hari.first.tanggal.weekday - 1;
     final sel = <Widget?>[
       for (var i = 0; i < kosong; i++) null,
-      for (final h in hari) _SelHari(hari: h),
+      for (final h in hari)
+        _SelHari(
+          hari: h,
+          dipilih: identical(h, terpilih),
+          onTap: () => setState(() => _dipilih = h.tanggal),
+        ),
     ];
-    // Hari ini menentukan bulan pada judul; kalau tidak ada, hari pertama.
-    final acuan = hari
-        .firstWhere((h) => h.hariIni, orElse: () => hari.first)
-        .tanggal;
 
     return KartuBerdua(
       radius: Radii.cardBesar,
@@ -494,24 +535,39 @@ class _Kalender extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(right: 48),
-            // Wrap, bukan Row: di layar sempit keterangannya turun ke bawah.
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: Gap.sm,
+            child: Row(
               children: [
-                Text(
-                  TanggalId.monthYear(acuan),
-                  style: text.titleMedium?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                TombolIkon(
+                  ikon: Icons.chevron_left_rounded,
+                  keterangan: 'Bulan sebelumnya',
+                  ukuran: 36,
+                  onTap: _memuat ? () {} : () => _geser(acuan, -1),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        TanggalId.monthYear(acuan),
+                        textAlign: TextAlign.center,
+                        style: text.titleMedium?.copyWith(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (data.rataRataPanjang > 0)
+                        Text(
+                          'siklus ${Rupiah.decimal(data.rataRataPanjang)} hari',
+                          style: text.labelSmall,
+                        ),
+                    ],
                   ),
                 ),
-                if (data.rataRataPanjang > 0)
-                  Text(
-                    'siklus ${Rupiah.decimal(data.rataRataPanjang)} hari',
-                    style: text.labelSmall,
-                  ),
+                TombolIkon(
+                  ikon: Icons.chevron_right_rounded,
+                  keterangan: 'Bulan berikutnya',
+                  ukuran: 36,
+                  onTap: _memuat ? () {} : () => _geser(acuan, 1),
+                ),
               ],
             ),
           ),
@@ -531,23 +587,121 @@ class _Kalender extends StatelessWidget {
           const SizedBox(height: 10),
           // Baris demi baris, bukan GridView, supaya tinggi sel tetap 40 dp
           // berapa pun lebar layarnya.
-          for (var awal = 0; awal < sel.length; awal += 7) ...[
-            if (awal > 0) const SizedBox(height: 4),
-            Row(
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 160),
+            opacity: _memuat ? .45 : 1,
+            child: Column(
               children: [
-                for (var i = awal; i < awal + 7; i++) ...[
-                  if (i > awal) const SizedBox(width: 4),
-                  Expanded(
-                    child:
-                        (i < sel.length ? sel[i] : null) ??
-                        const SizedBox(height: Sizes.calendarCell),
+                for (var awal = 0; awal < sel.length; awal += 7) ...[
+                  if (awal > 0) const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      for (var i = awal; i < awal + 7; i++) ...[
+                        if (i > awal) const SizedBox(width: 4),
+                        Expanded(
+                          child:
+                              (i < sel.length ? sel[i] : null) ??
+                              const SizedBox(height: Sizes.calendarCell),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ],
             ),
-          ],
+          ),
           const SizedBox(height: 10),
-          const _Legenda(),
+          _Legenda(adaCatatan: data.bisaUbah),
+          if (terpilih != null) ...[
+            const SizedBox(height: Gap.md),
+            _RincianHari(hari: terpilih, bisaUbah: data.bisaUbah),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Nama tiap penanda catatan harian, untuk ringkasan di bawah kalender.
+const _namaPenanda = {
+  'flow': 'aliran haid',
+  'note': 'catatan',
+  'intimacy': 'hubungan intim',
+  'pill': 'pil KB',
+  'symptoms': 'gejala',
+  'mood': 'suasana hati',
+  'test': 'hasil tes',
+  'body': 'catatan tubuh',
+};
+
+/// Rincian tanggal yang dipilih: posisi di siklus, peluang hamil, apa saja
+/// yang sudah dicatat, dan tombol menuju catatan hariannya.
+class _RincianHari extends StatelessWidget {
+  const _RincianHari({required this.hari, required this.bisaUbah});
+
+  final HariSiklus hari;
+  final bool bisaUbah;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final kini = DateTime.now();
+    final belumTiba = hari.tanggal.isAfter(
+      DateTime(kini.year, kini.month, kini.day),
+    );
+    final peluang = hari.peluangHamil;
+
+    final tercatat = [
+      for (final MapEntry(key: kunci, value: nama) in _namaPenanda.entries)
+        if (hari.penanda.contains(kunci)) nama,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: BerduaColors.card2,
+        borderRadius: BorderRadius.circular(Radii.pilihan),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${TanggalId.short(hari.tanggal)}'
+            '${hari.hariKe > 0 ? " · Hari siklus ${hari.hariKe}" : ""}',
+            style: text.bodyLarge?.copyWith(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Fase ${hari.fase}'
+            '${peluang == null ? "" : " · peluang hamil ${peluang.label.toLowerCase()}"}'
+            '${hari.perkiraan ? " (perkiraan)" : ""}',
+            style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
+          ),
+          if (bisaUbah) ...[
+            const SizedBox(height: 4),
+            Text(
+              tercatat.isEmpty
+                  ? (belumTiba
+                        ? 'Bisa dicatat mulai pada tanggalnya.'
+                        : 'Belum ada catatan di tanggal ini.')
+                  : 'Tercatat: ${tercatat.join(", ")}',
+              style: text.labelSmall?.copyWith(fontSize: 13, height: 1.45),
+            ),
+            if (!belumTiba) ...[
+              const SizedBox(height: Gap.md),
+              TombolPink(
+                label: tercatat.isEmpty ? 'Catat' : 'Ubah catatan',
+                tinggi: 46,
+                ukuranHuruf: 16,
+                tebal: FontWeight.w600,
+                onPressed: () =>
+                    context.push('/siklus/hari/${tanggalKawat(hari.tanggal)}'),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -555,9 +709,15 @@ class _Kalender extends StatelessWidget {
 }
 
 class _SelHari extends StatelessWidget {
-  const _SelHari({required this.hari});
+  const _SelHari({
+    required this.hari,
+    required this.dipilih,
+    required this.onTap,
+  });
 
   final HariSiklus hari;
+  final bool dipilih;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -578,43 +738,58 @@ class _SelHari extends StatelessWidget {
     };
 
     final peluang = hari.peluangHamil;
+    final adaCatatan = hari.penanda.isNotEmpty;
 
     return Semantics(
       label:
           '${TanggalId.short(hari.tanggal)}, ${hari.fase}'
           '${peluang == null ? "" : ", peluang hamil ${peluang.label.toLowerCase()}"}'
           '${hari.perkiraan ? ", perkiraan" : ""}'
+          '${adaCatatan ? ", ada catatan" : ""}'
           '${hari.hariIni ? ", hari ini" : ""}',
-      button: peluang != null,
+      button: true,
+      selected: dipilih,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // Mengetuk tanggal menyebut fase dan peluang hamil hari itu.
-        onTap: peluang == null
-            ? null
-            : () => tampilkanToast(
-                context,
-                '${TanggalId.short(hari.tanggal)}: fase ${hari.fase}, '
-                'peluang hamil ${peluang.label.toLowerCase()}'
-                '${hari.perkiraan ? " (perkiraan)" : ""}',
-              ),
+        onTap: onTap,
         child: Container(
           height: Sizes.calendarCell,
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: latar,
             borderRadius: BorderRadius.circular(Radii.chip),
-            border: hari.hariIni
-                ? Border.all(color: BerduaColors.ink, width: 2)
-                : null,
+            // Dipilih = garis ungu tebal; hari ini = garis tinta.
+            border: dipilih
+                ? Border.all(color: BerduaColors.rakaText, width: 3)
+                : (hari.hariIni
+                      ? Border.all(color: BerduaColors.ink, width: 2)
+                      : null),
           ),
-          child: Text(
-            '${hari.tanggal.day}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 15,
-              fontWeight: hari.hariIni ? FontWeight.w700 : FontWeight.w500,
-              color: warna,
-            ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(
+                '${hari.tanggal.day}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 15,
+                  fontWeight: hari.hariIni ? FontWeight.w700 : FontWeight.w500,
+                  color: warna,
+                ),
+              ),
+              // Titik kecil: ada catatan harian di tanggal ini.
+              if (adaCatatan)
+                Positioned(
+                  bottom: 4,
+                  child: Container(
+                    width: 5,
+                    height: 5,
+                    decoration: const BoxDecoration(
+                      color: BerduaColors.ink,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -623,7 +798,10 @@ class _SelHari extends StatelessWidget {
 }
 
 class _Legenda extends StatelessWidget {
-  const _Legenda();
+  const _Legenda({this.adaCatatan = false});
+
+  /// true untuk pencatat: titik "ada catatan" ikut dijelaskan.
+  final bool adaCatatan;
 
   @override
   Widget build(BuildContext context) {
@@ -663,6 +841,29 @@ class _Legenda extends StatelessWidget {
         item('Masa subur', warna: BerduaColors.rakaKuat),
         item('Luteal', warna: BerduaColors.netral),
         item('Hari ini'),
+        if (adaCatatan)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 5,
+                height: 5,
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                decoration: const BoxDecoration(
+                  color: BerduaColors.ink,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Ada catatan',
+                style: text.labelSmall?.copyWith(
+                  fontSize: 12,
+                  color: BerduaColors.label,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -722,52 +923,25 @@ class _TautanRiwayat extends StatelessWidget {
   }
 }
 
-class _KartuGejala extends StatefulWidget {
-  const _KartuGejala({required this.terpilih, required this.catatan});
+/// Pintu ke catatan harian hari ini: aliran, gejala, suasana hati, dan
+/// kategori lain diisi di layarnya sendiri.
+class _KartuCatatanHariIni extends StatelessWidget {
+  const _KartuCatatanHariIni({required this.gejala, required this.catatan});
 
-  final List<String> terpilih;
+  /// Gejala yang sudah dicatat hari ini.
+  final List<String> gejala;
   final String catatan;
 
-  @override
-  State<_KartuGejala> createState() => _KartuGejalaState();
-}
-
-class _KartuGejalaState extends State<_KartuGejala> {
-  late Set<String> _dipilih = widget.terpilih.toSet();
-  bool _menyimpan = false;
-
-  @override
-  void didUpdateWidget(_KartuGejala oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (!_samaIsi(oldWidget.terpilih.toSet(), widget.terpilih.toSet())) {
-      _dipilih = widget.terpilih.toSet();
-    }
-  }
-
-  Future<void> _simpan() async {
-    final messenger = ScaffoldMessenger.of(context);
-
-    setState(() => _menyimpan = true);
-
-    try {
-      await context.read<SiklusCubit>().simpanGejala(_dipilih.toList());
-      tampilkanToastVia(messenger, 'Gejala disimpan');
-    } on ApiException catch (error) {
-      tampilkanToastVia(messenger, error.message);
-    } finally {
-      if (mounted) setState(() => _menyimpan = false);
-    }
-  }
+  static const _ikon = ['🩸', '🤒', '😊', '🔋', '💞', '💊'];
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final berubah = !_samaIsi(_dipilih, widget.terpilih.toSet());
 
     return KartuBerdua(
       radius: Radii.cardBesar,
       stiker: JenisStiker.heart,
+      onTap: () => context.push('/siklus/hari/${tanggalKawat(DateTime.now())}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -783,43 +957,67 @@ class _KartuGejalaState extends State<_KartuGejala> {
           ),
           const SizedBox(height: Gap.md),
           Wrap(
-            spacing: Gap.sm,
-            runSpacing: Gap.sm,
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              for (final gejala in BerduaEnums.symptoms)
-                ChipBerdua(
-                  label: kapitalAwal(gejala),
-                  aktif: _dipilih.contains(gejala),
-                  onTap: () => setState(() {
-                    if (!_dipilih.remove(gejala)) _dipilih.add(gejala);
-                  }),
+              for (final emoji in _ikon)
+                SizedBox(
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: BerduaColors.card2,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      emoji,
+                      style: const TextStyle(fontSize: 19, height: 1.1),
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: Gap.md),
           Text(
-            widget.catatan,
-            style: text.labelSmall?.copyWith(fontSize: 14, height: 1.45),
+            gejala.isEmpty
+                ? 'Catat aliran, gejala, suasana hati, dan lainnya.'
+                : 'Gejala hari ini: '
+                      '${gejala.map((g) => Katalog.label(Katalog.semuaGejala, g)).join(', ')}',
+            style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
           ),
-          if (berubah) ...[
-            const SizedBox(height: Gap.md),
-            TombolPink(
-              label: 'Simpan gejala',
-              tinggi: 46,
-              ukuranHuruf: 16,
-              tebal: FontWeight.w600,
-              memuat: _menyimpan,
-              onPressed: _simpan,
-            ),
-          ],
+          const SizedBox(height: 6),
+          Text(
+            catatan,
+            style: text.labelSmall?.copyWith(fontSize: 13, height: 1.45),
+          ),
+          const SizedBox(height: Gap.md),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  'Isi catatan hari ini',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodyLarge?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: BerduaColors.roseChipText,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: BerduaColors.roseChipText,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
-
-bool _samaIsi(Set<String> a, Set<String> b) =>
-    a.length == b.length && a.containsAll(b);
 
 class _TombolHaidMulai extends StatefulWidget {
   const _TombolHaidMulai();

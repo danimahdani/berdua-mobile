@@ -1323,7 +1323,12 @@ class LayarBerdua extends StatefulWidget {
     this.ruangFab = false,
     this.kunciPantul,
     this.onSegarkan,
+    this.tanpaKepala = false,
   });
+
+  /// true = kepala tidak ikut digulir karena sudah dipasang di luar layar ini
+  /// (mis. halaman yang bisa digeser di tab Uang).
+  final bool tanpaKepala;
 
   /// Kalau diisi, daftar bisa ditarik ke bawah untuk memuat ulang.
   final Future<void> Function()? onSegarkan;
@@ -1408,7 +1413,10 @@ class _LayarBerduaState extends State<LayarBerdua> {
         widget.ruangFab ? 96 : Gap.xxl,
       ),
       children: memantulkan(
-        [kepala, const SizedBox(height: Gap.md), ...widget.children],
+        [
+          if (!widget.tanpaKepala) ...[kepala, const SizedBox(height: Gap.md)],
+          ...widget.children,
+        ],
         mulai: _mulai,
         kunci: _putaran,
       ),

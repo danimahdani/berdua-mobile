@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/fitur.dart';
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
 import '../../models/models.dart';
@@ -45,6 +46,11 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
   String? _galat;
 
   bool get _ubah => widget.transaksi != null;
+
+  /// Dompet bersama hanya ditawarkan kalau fiturnya menyala, atau kalau
+  /// transaksi yang diubah memang sudah dari dompet.
+  late final bool _tawarkanDompet =
+      Fitur.dompetBersama || widget.transaksi?.split == CaraPembagian.wallet;
 
   @override
   void initState() {
@@ -292,8 +298,11 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
             const LabelIsian('Dibayar oleh'),
             SegmenBerdua<int?>(
               gaya: GayaSegmen.sheet,
-              pilihan: [for (final orang in anggota) orang.id, _dompet],
-              lebar: [for (final _ in anggota) 5, 7],
+              pilihan: [
+                for (final orang in anggota) orang.id,
+                if (_tawarkanDompet) _dompet,
+              ],
+              lebar: _tawarkanDompet ? [for (final _ in anggota) 5, 7] : null,
               terpilih: dompet ? _dompet : _payerId,
               label: (id) => id == _dompet ? 'Dompet bersama' : nama(id),
               onPilih: _pilihPembayar,

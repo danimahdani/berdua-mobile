@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/api_client.dart';
 import '../../core/rupiah.dart';
@@ -32,7 +32,6 @@ class ProfilScreen extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final user = sesi.user;
     final partner = sesi.partner;
-    final kode = sesi.couple?.inviteCode;
     final namaPasangan = partner == null || partner.name.isEmpty
         ? 'pasangan'
         : partner.name;
@@ -70,8 +69,8 @@ class ProfilScreen extends StatelessWidget {
                 [
                   if (partner != null && sesi.couple?.since != null)
                     'Terhubung sejak ${TanggalId.long(sesi.couple!.since!)}',
-                  if (partner == null) 'Belum terhubung dengan pasangan',
-                  ?kode,
+                  // Pasangan terhubung sendiri begitu masuk dengan nomornya.
+                  if (partner == null) 'Pasanganmu belum masuk ke Berdua',
                 ].join(' · '),
                 textAlign: TextAlign.center,
                 style: text.labelSmall?.copyWith(fontSize: 14),
@@ -80,35 +79,6 @@ class ProfilScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: Gap.betweenCards),
-
-          // Belum terhubung: kode undangan tampil lagi di sini.
-          if (partner == null && kode != null) ...[
-            KartuRose(
-              stiker: JenisStiker.mail,
-              child: Column(
-                children: [
-                  AngkaBerbingkai(kode, ukuran: 28),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Kirim kode ini ke pasanganmu supaya catatan kalian '
-                    'tersambung.',
-                    textAlign: TextAlign.center,
-                    style: text.bodyMedium?.copyWith(height: 1.45),
-                  ),
-                  const SizedBox(height: Gap.md),
-                  TombolSekunder(
-                    label: 'Salin kode',
-                    ikon: Icons.copy_rounded,
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: kode));
-                      tampilkanToast(context, 'Kode disalin');
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: Gap.betweenCards),
-          ],
 
           // Hanya pencatat siklus yang memutuskan apa yang dibagikan (§5.3).
           if (user?.tracksCycle ?? false) ...[
@@ -144,6 +114,7 @@ class ProfilScreen extends StatelessWidget {
 
           const _Baris(keterangan: 'Mata uang', label: 'Rupiah (Rp)'),
           const SizedBox(height: Gap.betweenCards),
+          const _Versi(),
           _Baris(
             keterangan: 'Akun',
             label: 'Keluar',
@@ -152,6 +123,49 @@ class ProfilScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Versi aplikasi yang terpasang, dibaca dari `version` di pubspec.yaml.
+/// Tidak tampil kalau platform tidak bisa memberitahukannya.
+class _Versi extends StatefulWidget {
+  const _Versi();
+
+  @override
+  State<_Versi> createState() => _VersiState();
+}
+
+class _VersiState extends State<_Versi> {
+  String? _versi;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+
+      if (!mounted) return;
+
+      setState(() => _versi = '${info.version} (${info.buildNumber})');
+    } catch (_) {
+      // Tanpa info paket (mis. saat uji): barisnya tidak ditampilkan.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final versi = _versi;
+
+    if (versi == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Gap.betweenCards),
+      child: _Baris(keterangan: 'Versi aplikasi', label: versi),
     );
   }
 }

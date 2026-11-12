@@ -34,6 +34,7 @@ class HariSiklus {
     required this.perkiraan,
     required this.hariIni,
     this.peluangHamil,
+    this.penanda = const [],
   });
 
   factory HariSiklus.fromJson(Map<String, dynamic> json) => HariSiklus(
@@ -43,7 +44,12 @@ class HariSiklus {
     perkiraan: json['predicted'] as bool? ?? false,
     hariIni: json['is_today'] as bool? ?? false,
     peluangHamil: PeluangHamil.dariKawat(json['pregnancy_chance']),
+    penanda: (json['marks'] as List<dynamic>? ?? const []).cast<String>(),
   );
+
+  /// Jenis catatan harian yang terisi di tanggal ini (mis. `flow`, `note`).
+  /// Hanya dikirim untuk pencatat; bagi pasangan selalu kosong.
+  final List<String> penanda;
 
   final DateTime tanggal;
   final String fase;
@@ -98,6 +104,7 @@ class Siklus {
     this.peluangHamil,
     this.masaSuburMulai,
     this.masaSuburSelesai,
+    this.bulan,
   });
 
   factory Siklus.fromJson(Map<String, dynamic> json) {
@@ -140,6 +147,7 @@ class Siklus {
       peluangHamil: PeluangHamil.dariKawat(json['pregnancy_chance']),
       masaSuburMulai: _tanggal(masaSubur?['start']),
       masaSuburSelesai: _tanggal(masaSubur?['end']),
+      bulan: _tanggal(json['month'] is String ? '${json['month']}-01' : null),
     );
   }
 
@@ -169,6 +177,9 @@ class Siklus {
   /// Masa subur yang sedang berjalan atau yang berikutnya.
   final DateTime? masaSuburMulai;
   final DateTime? masaSuburSelesai;
+
+  /// Bulan yang ditampilkan kalender (tanggal 1).
+  final DateTime? bulan;
 
   String get faseLabel =>
       fase.isEmpty ? '' : 'Fase ${fase[0].toUpperCase()}${fase.substring(1)}';
@@ -213,8 +224,9 @@ class RiwayatSiklus {
     rataRataLamaHaid: (json['average_period_length'] as num?)?.toDouble() ?? 0,
     teratur: json['is_regular'] as bool?,
     jumlahTercatat: json['cycles_recorded'] as int? ?? 0,
-    gejalaSering: (json['frequent_symptoms'] as Map<String, dynamic>? ?? {})
-        .map((key, value) => MapEntry(key, value as int)),
+    gejalaSering: petaJson(
+      json['frequent_symptoms'],
+    ).map((key, value) => MapEntry(key, (value as num).toInt())),
   );
 
   final List<SiklusLalu> siklus;
@@ -231,12 +243,38 @@ class SiklusCubit extends MuatanCubit<Siklus> {
   final Dio _dio;
   final BerandaCubit _beranda;
 
+  /// Bulan kalender yang sedang dibuka; null = bulan ini.
+  DateTime? _bulan;
+
   @override
   Future<Siklus> ambil() async {
-    final data = await _dio.send('GET', '/cycle');
+    final bulan = _bulan;
+
+    final data = await _dio.send(
+      'GET',
+      '/cycle',
+      query: bulan == null
+          ? null
+          : {
+              'month':
+                  '${bulan.year.toString().padLeft(4, '0')}-'
+                  '${bulan.month.toString().padLeft(2, '0')}',
+            },
+    );
 
     return Siklus.fromJson(data);
   }
+
+  /// Membuka bulan lain di kalender. Isi lama tetap tampil selama memuat.
+  Future<void> gantiBulan(DateTime bulan) {
+    _bulan = DateTime(bulan.year, bulan.month);
+
+    return segarkan();
+  }
+
+  /// Dipanggil sesudah catatan harian berubah: kalender dan kartu siklus di
+  /// beranda ikut diperbarui.
+  Future<void> perbarui() => _segarkan();
 
   /// "Haid mulai hari ini" di layar 13.
   Future<void> tandaiHaidMulai() async {

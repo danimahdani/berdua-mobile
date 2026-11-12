@@ -16,9 +16,11 @@ import 'features/kuis/kuis_cubit.dart';
 import 'features/kuis/kuis_screen.dart';
 import 'features/kuis/riwayat_kuis_screen.dart';
 import 'features/laporan/laporan_screen.dart';
+import 'features/laporan/rata_rata_screen.dart';
 import 'features/money/uang_screen.dart';
 import 'features/notifikasi/notifikasi_screen.dart';
 import 'features/profil/profil_screen.dart';
+import 'features/siklus/catatan_hari_screen.dart';
 import 'features/siklus/riwayat_screen.dart';
 import 'features/siklus/siklus_screen.dart';
 import 'theme/berdua_theme.dart';
@@ -87,10 +89,30 @@ GoRouter _buatRouter(SesiCubit sesiCubit, Listenable pendengar) {
         parentNavigatorKey: _rootKey,
         builder: (_, _) => const RiwayatSiklusScreen(),
       ),
+      // Catatan harian siklus untuk satu tanggal (YYYY-MM-DD).
+      GoRoute(
+        path: '/siklus/hari/:tanggal',
+        parentNavigatorKey: _rootKey,
+        builder: (_, state) => CatatanHariScreen(
+          tanggal:
+              DateTime.tryParse(state.pathParameters['tanggal']!) ??
+              DateTime.now(),
+        ),
+      ),
       GoRoute(
         path: '/laporan',
         parentNavigatorKey: _rootKey,
         builder: (_, _) => const LaporanScreen(),
+      ),
+      GoRoute(
+        path: '/laporan-pribadi',
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => LaporanScreen.untukPribadi(),
+      ),
+      GoRoute(
+        path: '/rata-rata',
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => const RataRataScreen(),
       ),
       GoRoute(
         path: '/bersama/tabungan/:id',

@@ -3,44 +3,181 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/fitur.dart';
 import '../../core/rupiah.dart';
 import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
 import '../auth/sesi_cubit.dart';
+import '../laporan/rata_rata_cubit.dart';
+import '../pribadi/pribadi_cubit.dart';
+import '../pribadi/pribadi_screen.dart';
 import 'uang_cubit.dart';
 import 'tambah_pengeluaran_sheet.dart';
 
-/// Layar 08: Uang bersama.
-class UangScreen extends StatelessWidget {
+/// Tab Uang: uang bersama dan uang pribadi berdampingan, bisa digeser ke
+/// kiri/kanan atau dipilih lewat segmen di atasnya.
+class UangScreen extends StatefulWidget {
   const UangScreen({super.key});
+
+  @override
+  State<UangScreen> createState() => _UangScreenState();
+}
+
+class _UangScreenState extends State<UangScreen> {
+  late final PageController _halaman = PageController(
+    initialPage: context.read<ModeUangCubit>().state ? 1 : 0,
+  );
+
+  @override
+  void dispose() {
+    _halaman.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pribadi = context.watch<ModeUangCubit>().state;
+    final siap = pribadi
+        ? context.watch<PribadiCubit>().state.adaNilai
+        : context.watch<UangCubit>().state.adaNilai;
+
+    return BlocListener<ModeUangCubit, bool>(
+      // Segmen diketuk → geser ke halamannya.
+      listener: (context, pribadi) {
+        final tujuan = pribadi ? 1 : 0;
+
+        if (!_halaman.hasClients || _halaman.page?.round() == tujuan) return;
+
+        _halaman.animateToPage(
+          tujuan,
+          duration: const Duration(milliseconds: 340),
+          curve: Curves.easeInOutCubic,
+        );
+      },
+      child: Scaffold(
+        floatingActionButton: !siap
+            ? null
+            : pribadi
+            ? FabBerdua(
+                keterangan: 'Tambah pengeluaran pribadi',
+                onTap: () => LembarPribadi.buka(context),
+              )
+            : FabBerdua(
+                keterangan: 'Tambah pengeluaran',
+                onTap: () => TambahPengeluaranSheet.buka(context),
+              ),
+        body: LatarBerdua(
+          child: Column(
+            children: [
+              // Kepala dan segmen diam di tempat; hanya isi di bawahnya yang
+              // bergeser.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Gap.screenEdge,
+                  Gap.sm,
+                  Gap.screenEdge,
+                  0,
+                ),
+                child: Column(
+                  children: [
+                    // Judul berganti dengan memudar, bukan melompat.
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: KepalaLayar(
+                        key: ValueKey(pribadi),
+                        judul: pribadi ? 'Uang pribadi' : 'Uang bersama',
+                        kiri: Stiker.kecil(
+                          pribadi ? JenisStiker.piggy : JenisStiker.wallet,
+                        ),
+                        aksi: TombolIkon(
+                          ikon: Icons.bar_chart_rounded,
+                          keterangan: pribadi ? 'Laporan pribadi' : 'Laporan',
+                          onTap: () => context.push(
+                            pribadi ? '/laporan-pribadi' : '/laporan',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Gap.md),
+                    PemilihModeUang(halaman: _halaman),
+                    // Ruang untuk bayangan segmen agar tidak tertutup isi.
+                    const SizedBox(height: Gap.sm),
+                  ],
+                ),
+              ),
+              Expanded(
+                // Bilah status sudah digambar oleh latar di atas.
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: PageView(
+                    controller: _halaman,
+                    // Halaman digeser → segmen ikut berpindah.
+                    onPageChanged: (i) =>
+                        context.read<ModeUangCubit>().pilih(pribadi: i == 1),
+                    children: const [
+                      _TetapHidup(child: UangBersamaScreen()),
+                      _TetapHidup(child: PribadiScreen()),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Menjaga posisi gulir halaman yang sedang tidak tampil.
+class _TetapHidup extends StatefulWidget {
+  const _TetapHidup({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TetapHidup> createState() => _TetapHidupState();
+}
+
+class _TetapHidupState extends State<_TetapHidup>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return widget.child;
+  }
+}
+
+/// Layar 08: isi uang bersama (kepala & FAB dipasang oleh [UangScreen]).
+class UangBersamaScreen extends StatelessWidget {
+  const UangBersamaScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final ringkasan = context.watch<UangCubit>().state;
     final sesi = context.watch<SesiCubit>().state;
 
-    return Scaffold(
-      floatingActionButton: ringkasan.adaNilai
-          ? FabBerdua(
-              keterangan: 'Tambah pengeluaran',
-              onTap: () => TambahPengeluaranSheet.buka(context),
-            )
-          : null,
-      body: ringkasan.when(
-        // Isi lama bertahan saat filter berganti; hanya pemuatan pertama yang
-        // memakai kerangka.
-        loading: () => const SkeletonUang(),
-        error: (error, _) => GalatLayar(
-          tab: 1,
-          pesan: error is ApiException
-              ? error.message
-              : 'Gagal memuat transaksi.',
-          onUlangi: () => context.read<UangCubit>().muat(),
-        ),
-        data: (data) => _Isi(data: data, sesi: sesi),
+    return ringkasan.when(
+      // Isi lama bertahan saat filter berganti; hanya pemuatan pertama yang
+      // memakai kerangka.
+      loading: () => const SkeletonUang(tanpaJudul: true),
+      error: (error, _) => GalatLayar(
+        tab: 1,
+        pesan: error is ApiException
+            ? error.message
+            : 'Gagal memuat transaksi.',
+        onUlangi: () => context.read<UangCubit>().muat(),
       ),
+      data: (data) => _Isi(data: data, sesi: sesi),
     );
   }
 }
@@ -70,16 +207,11 @@ class _Isi extends StatelessWidget {
 
     return LayarBerdua(
       judul: 'Uang bersama',
+      tanpaKepala: true,
       tab: 1,
       ruangFab: true,
-      kiri: const Stiker.kecil(JenisStiker.wallet),
-      aksi: TombolIkon(
-        ikon: Icons.bar_chart_rounded,
-        keterangan: 'Laporan',
-        onTap: () => context.push('/laporan'),
-      ),
       children: [
-        const SizedBox(height: Gap.sm),
+        const SizedBox(height: Gap.xs),
         // §12: satu kartu rose per layar — di sini untuk saldo utang.
         KartuRose(
           stiker: JenisStiker.coin,
@@ -109,19 +241,22 @@ class _Isi extends StatelessWidget {
             children: [
               Expanded(
                 child: _Ringkas(
-                  label: 'Dompet bersama',
-                  nilai: Rupiah.format(data.walletBalance),
-                  stiker: JenisStiker.wallet,
-                ),
-              ),
-              const SizedBox(width: Gap.betweenCards),
-              Expanded(
-                child: _Ringkas(
                   label: 'Total ${TanggalId.month(DateTime.now())}',
                   nilai: Rupiah.format(data.monthTotal),
                   stiker: JenisStiker.chart,
                 ),
               ),
+              const SizedBox(width: Gap.betweenCards),
+              if (Fitur.dompetBersama)
+                Expanded(
+                  child: _Ringkas(
+                    label: 'Dompet bersama',
+                    nilai: Rupiah.format(data.walletBalance),
+                    stiker: JenisStiker.wallet,
+                  ),
+                )
+              else
+                const Expanded(child: _RingkasRataRata()),
             ],
           ),
         ),
@@ -168,17 +303,38 @@ class _Isi extends StatelessWidget {
   }
 }
 
-/// Kartu kecil dua baris dengan stiker: "Dompet bersama" di atas nominalnya.
+/// Rata-rata pengeluaran untuk rentang yang terakhir dipilih; mengetuknya
+/// membuka layar rata-rata.
+class _RingkasRataRata extends StatelessWidget {
+  const _RingkasRataRata();
+
+  @override
+  Widget build(BuildContext context) {
+    final periode = context.watch<PeriodeRataRataCubit>().state;
+    final rataRata = context.watch<RataRataCubit>().state.nilai;
+
+    return _Ringkas(
+      label: 'Rata-rata / ${periode.satuan}',
+      nilai: rataRata == null ? '–' : Rupiah.format(rataRata.rataRata),
+      stiker: JenisStiker.coin,
+      onTap: () => context.push('/rata-rata'),
+    );
+  }
+}
+
+/// Kartu kecil dua baris dengan stiker: label di atas nominalnya.
 class _Ringkas extends StatelessWidget {
   const _Ringkas({
     required this.label,
     required this.nilai,
     required this.stiker,
+    this.onTap,
   });
 
   final String label;
   final String nilai;
   final JenisStiker stiker;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -188,6 +344,7 @@ class _Ringkas extends StatelessWidget {
       radius: Radii.button,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       stiker: stiker,
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

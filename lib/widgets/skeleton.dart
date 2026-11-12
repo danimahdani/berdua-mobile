@@ -175,11 +175,15 @@ class SkeletonLayar extends StatelessWidget {
     required this.children,
     this.lebarJudul = 0.45,
     this.kembali = false,
+    this.tanpaJudul = false,
   });
 
   final List<Widget> children;
   final double lebarJudul;
   final bool kembali;
+
+  /// true = judul asli sudah tampil di luar kerangka ini.
+  final bool tanpaJudul;
 
   @override
   Widget build(BuildContext context) {
@@ -188,26 +192,31 @@ class SkeletonLayar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Gap.screenEdge,
-                Gap.lg,
-                Gap.screenEdge,
-                Gap.lg,
-              ),
-              child: Row(
-                children: [
-                  if (kembali) ...[
-                    const SkeletonBox(
-                      width: Sizes.backButton,
-                      height: Sizes.backButton,
+            if (tanpaJudul)
+              const SizedBox(height: Gap.sm)
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Gap.screenEdge,
+                  Gap.lg,
+                  Gap.screenEdge,
+                  Gap.lg,
+                ),
+                child: Row(
+                  children: [
+                    if (kembali) ...[
+                      const SkeletonBox(
+                        width: Sizes.backButton,
+                        height: Sizes.backButton,
+                      ),
+                      const SizedBox(width: Gap.md),
+                    ],
+                    Expanded(
+                      child: SkeletonTeks(lebar: lebarJudul, tinggi: 24),
                     ),
-                    const SizedBox(width: Gap.md),
                   ],
-                  Expanded(child: SkeletonTeks(lebar: lebarJudul, tinggi: 24)),
-                ],
+                ),
               ),
-            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
@@ -297,11 +306,14 @@ class SkeletonBeranda extends StatelessWidget {
 
 /// Layar 08.
 class SkeletonUang extends StatelessWidget {
-  const SkeletonUang({super.key});
+  const SkeletonUang({super.key, this.tanpaJudul = false});
+
+  final bool tanpaJudul;
 
   @override
   Widget build(BuildContext context) {
     return SkeletonLayar(
+      tanpaJudul: tanpaJudul,
       children: [
         const SkeletonKartu(tinggi: 168, warna: BerduaColors.roseCard),
         const SizedBox(height: Gap.betweenCards),

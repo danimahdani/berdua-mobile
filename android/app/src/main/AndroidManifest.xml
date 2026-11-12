@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Build release butuh ini untuk menghubungi backend. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Android 13+: izin menampilkan notifikasi (pengingat kuis lewat FCM). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
@@ -28,6 +30,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Notifikasi FCM yang datang saat aplikasi tertutup memakai channel
+             ini (dibuat di lib/core/notifikasi_push.dart), supaya muncul
+             sebagai heads-up, bukan diam-diam di channel bawaan. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="berdua_pengingat" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

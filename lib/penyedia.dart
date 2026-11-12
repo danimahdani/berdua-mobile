@@ -9,8 +9,10 @@ import 'features/beranda/beranda_cubit.dart';
 import 'features/bersama/bersama_cubit.dart';
 import 'features/kuis/kuis_cubit.dart';
 import 'features/laporan/laporan_cubit.dart';
+import 'features/laporan/rata_rata_cubit.dart';
 import 'features/money/uang_cubit.dart';
 import 'features/notifikasi/notifikasi_cubit.dart';
+import 'features/pribadi/pribadi_cubit.dart';
 import 'features/siklus/siklus_cubit.dart';
 
 /// Menyediakan klien HTTP dan semua cubit aplikasi untuk seluruh pohon
@@ -73,6 +75,17 @@ class PenyediaBerdua extends StatelessWidget {
                 UangCubit(context.read(), context.read(), context.read()),
           ),
           BlocProvider(create: (_) => BulanLaporanCubit()),
+          BlocProvider(create: (_) => PeriodeRataRataCubit()),
+          BlocProvider(create: (_) => ModeUangCubit()),
+          BlocProvider(create: (_) => BulanPribadiCubit()),
+          BlocProvider(
+            create: (context) =>
+                PribadiCubit(context.read(), context.read(), context.read()),
+          ),
+          BlocProvider(
+            create: (context) =>
+                RataRataCubit(context.read(), context.read(), context.read()),
+          ),
           BlocProvider(
             create: (context) => LaporanCubit(context.read(), context.read()),
           ),

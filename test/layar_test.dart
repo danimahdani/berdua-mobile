@@ -12,10 +12,13 @@ import 'package:berdua/features/bersama/tabungan_detail_screen.dart';
 import 'package:berdua/features/kuis/kuis_screen.dart';
 import 'package:berdua/features/kuis/riwayat_kuis_screen.dart';
 import 'package:berdua/features/laporan/laporan_screen.dart';
+import 'package:berdua/features/laporan/rata_rata_screen.dart';
 import 'package:berdua/features/money/tambah_pengeluaran_sheet.dart';
 import 'package:berdua/features/money/uang_screen.dart';
 import 'package:berdua/features/notifikasi/notifikasi_screen.dart';
+import 'package:berdua/features/pribadi/pribadi_screen.dart';
 import 'package:berdua/features/profil/profil_screen.dart';
+import 'package:berdua/features/siklus/catatan_hari_screen.dart';
 import 'package:berdua/features/siklus/riwayat_screen.dart';
 import 'package:berdua/features/siklus/siklus_screen.dart';
 import 'package:berdua/models/models.dart';
@@ -152,12 +155,132 @@ Map<String, dynamic> _kuis({
   };
 }
 
+/// Pengeluaran pribadi bulan ini milik akun yang masuk.
+Map<String, dynamic> _pribadi({bool kosong = false}) => {
+  'month': _tgl(_hariIni).substring(0, 7),
+  'data': kosong
+      ? <Object>[]
+      : [
+          {
+            'id': 11,
+            'title': 'Skincare',
+            'category': 'Belanja',
+            'amount': 185000,
+            'date': _tgl(_hariIni),
+          },
+          {
+            'id': 10,
+            'title': 'Kopi susu',
+            'category': 'Makan',
+            'amount': 28000,
+            'date': _tgl(_hariIni),
+          },
+        ],
+  'total': kosong ? 0 : 213000,
+  'previous_total': kosong ? 0 : 250000,
+  'transaction_count': kosong ? 0 : 2,
+  'by_category': kosong ? <Object>[] : {'Belanja': 185000, 'Makan': 28000},
+  'monthly_average': kosong ? null : 240000,
+  'averaged_months': kosong ? 0 : 3,
+};
+
+/// Rata-rata: bulanan punya 3 periode (yang terakhir berjalan), tahunan baru
+/// satu, mingguan kosong.
+Map<String, dynamic> _rataRata(String periode) {
+  if (periode == 'week') {
+    return {
+      'period': 'week',
+      'average': 0,
+      'averaged_periods': 0,
+      'excludes_current': false,
+      'transaction_count': 0,
+      'highest': null,
+      'lowest': null,
+      'periods': <Object>[],
+      'by_category': <Object>[],
+    };
+  }
+
+  Map<String, dynamic> p(String mulai, String akhir, int total, bool kini) => {
+    'start': mulai,
+    'end': akhir,
+    'total': total,
+    'count': 3,
+    'is_current': kini,
+  };
+
+  if (periode == 'year') {
+    final tahun = p('2026-01-01', '2026-12-31', 9000000, true);
+
+    return {
+      'period': 'year',
+      'average': 9000000,
+      'averaged_periods': 1,
+      'excludes_current': false,
+      'transaction_count': 40,
+      'highest': tahun,
+      'lowest': tahun,
+      'periods': [tahun],
+      'by_category': {'Makan': 6000000, 'Tagihan': 3000000},
+    };
+  }
+
+  final sep = p('2026-09-01', '2026-09-30', 3200000, false);
+  final okt = p('2026-10-01', '2026-10-31', 2800000, false);
+
+  return {
+    'period': 'month',
+    'average': 3000000,
+    'averaged_periods': 2,
+    'excludes_current': true,
+    'transaction_count': 12,
+    'highest': sep,
+    'lowest': okt,
+    'periods': [sep, okt, p('2026-11-01', '2026-11-30', 1200000, true)],
+    'by_category': {'Makan': 1800000, 'Belanja': 900000, 'Hiburan': 300000},
+  };
+}
+
 Map<String, dynamic> _jawaban(
   String path, {
   bool siklusPasangan = false,
   bool kuisSelesai = false,
   bool pasanganMenjawab = true,
 }) {
+  // Catatan harian siklus, termasuk tanda awal/akhir haid di tanggal itu.
+  if (path.contains('/cycle/days/')) {
+    return {
+      'date': _tgl(_hariIni),
+      'is_future': false,
+      'day_of_cycle': 22,
+      'phase': 'luteal',
+      'pregnancy_chance': 'rendah',
+      'predicted': false,
+      'period': {
+        'is_start': false,
+        'is_end': path.endsWith('/period-end'),
+        'can_end': true,
+      },
+      'log': {
+        'flow': 'sedang',
+        'note': null,
+        'intimacy': null,
+        'intimacy_count': null,
+        'intimacy_climax': null,
+        'pill_taken': null,
+        'moods': ['tenang'],
+        'energy': null,
+        'breast_exam': <String>[],
+        'ovulation_test': null,
+        'pregnancy_test': null,
+        'cervical_mucus': null,
+        'weight_kg': null,
+        'temperature_c': null,
+        'symptoms': ['kram'],
+      },
+    };
+  }
+
   if (path.endsWith('/quiz/today') || path.endsWith('/quiz/today/answers')) {
     return {'data': _kuis(selesai: kuisSelesai, pasangan: pasanganMenjawab)};
   }
@@ -323,6 +446,7 @@ Map<String, dynamic> _jawaban(
         'end': _tgl(_hariIni.add(const Duration(days: 22))),
       },
       'symptoms_today': ['lelah', 'kram'],
+      'month': _tgl(awal).substring(0, 7),
       'calendar': [
         for (var i = 0; i < akhir; i++)
           {
@@ -337,6 +461,8 @@ Map<String, dynamic> _jawaban(
             ][i ~/ 8],
             'predicted': i > 20,
             'is_today': i + 1 == _hariIni.day,
+            // Penanda catatan harian hanya dikirim untuk pencatat.
+            if (!siklusPasangan) 'marks': i == 2 ? ['flow', 'symptoms'] : [],
           },
       ],
       'tips': siklusPasangan
@@ -480,12 +606,94 @@ class _Adaptor implements HttpClientAdapter {
   /// Isi permintaan PUT terakhir ke `/quiz/today/answers`.
   Object? jawabanTerkirim;
 
+  /// Isi permintaan PUT terakhir ke `/cycle/days/{tanggal}`.
+  Map<String, dynamic>? catatanTerkirim;
+
+  /// Nilai `month` terakhir yang diminta ke `/cycle`.
+  String? bulanDiminta;
+
+  /// Permintaan ubahan ke `/personal-expenses`: "POST /api/... {json}".
+  final pribadiTerkirim = <String>[];
+
+  /// true = belum ada pengeluaran pribadi sama sekali.
+  bool pribadiKosong = false;
+
+  /// Rentang yang diminta ke `/transactions/average`, berurutan.
+  final periodeRataRata = <String>[];
+
+  /// Semua permintaan, mis. `PUT /api/cycle/days/2026-11-12/period-end`.
+  final permintaan = <String>[];
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    permintaan.add('${options.method} ${options.uri.path}');
+
+    if (options.uri.path.endsWith('/personal-expenses/report')) {
+      return ResponseBody.fromString(
+        jsonEncode({
+          'year': _hariIni.year,
+          'month': _hariIni.month,
+          'total': 213000,
+          'previous_total': 250000,
+          'delta': -37000,
+          'budget': null,
+          'budget_pct': null,
+          'by_category': {'Makan': 150000, 'Hiburan': 63000},
+          'by_payer': <String, int>{},
+          'by_week': {'1': 100000, '2': 113000},
+          'transaction_count': 4,
+        }),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
+
+    if (options.uri.path.contains('/personal-expenses')) {
+      if (options.method != 'GET') {
+        pribadiTerkirim.add(
+          '${options.method} ${options.uri.path} ${jsonEncode(options.data)}',
+        );
+      }
+
+      return ResponseBody.fromString(
+        jsonEncode(_pribadi(kosong: pribadiKosong)),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
+
+    if (options.uri.path.endsWith('/transactions/average')) {
+      final periode = options.uri.queryParameters['period'] ?? 'month';
+
+      periodeRataRata.add(periode);
+
+      return ResponseBody.fromString(
+        jsonEncode(_rataRata(periode)),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
+
+    if (options.uri.path.endsWith('/cycle') &&
+        options.uri.queryParameters['month'] != null) {
+      bulanDiminta = options.uri.queryParameters['month'];
+    }
+
+    if (options.method == 'PUT' &&
+        RegExp(r'/cycle/days/[\d-]+$').hasMatch(options.uri.path)) {
+      catatanTerkirim = Map<String, dynamic>.from(options.data as Map);
+    }
+
     if (options.method == 'PUT' &&
         options.uri.path.endsWith('/quiz/today/answers')) {
       kuisSelesai = true;
@@ -597,7 +805,11 @@ void main() {
     'beranda': () => const BerandaScreen(),
     'uang': () => const UangScreen(),
     'laporan': () => const LaporanScreen(),
+    'laporan pribadi': LaporanScreen.untukPribadi,
+    'uang pribadi': () => const PribadiScreen(),
+    'rata-rata': () => const RataRataScreen(),
     'siklus': () => const SiklusScreen(),
+    'catatan harian': () => CatatanHariScreen(tanggal: _hariIni),
     'riwayat siklus': () => const RiwayatSiklusScreen(),
     'bersama': () => const BersamaScreen(),
     'detail tabungan': () => const TabunganDetailScreen(goalId: 1),
@@ -747,8 +959,11 @@ void main() {
     await pasang(tester, const BerandaScreen());
 
     expect(find.text('Hai, Dinda'), findsOneWidget);
-    expect(find.text('Rp 51.000'), findsOneWidget);
-    expect(find.text('Raka berutang ke kamu'), findsOneWidget);
+    expect(find.text('Pengeluaran bersama'), findsOneWidget);
+    expect(find.text('Rp 12.345.678'), findsOneWidget);
+    expect(find.text('Rata-rata / bulan'), findsOneWidget);
+    expect(find.text('Rp 3.000.000'), findsOneWidget);
+    expect(find.text('Raka berutang ke kamu Rp 51.000'), findsOneWidget);
     expect(find.text('99+'), findsOneWidget);
   });
 
@@ -816,6 +1031,141 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.textContaining('peluang hamil tinggi'), findsOneWidget);
+    expect(find.textContaining('Hari siklus 17'), findsOneWidget);
+    // Pencatat bisa membuka catatan harian, kecuali untuk hari yang belum
+    // tiba.
+    expect(
+      find.text('Catat'),
+      _hariIni.day >= 17 ? findsOneWidget : findsNothing,
+    );
+  });
+
+  testWidgets('siklus: tanggal yang sudah dicatat menyebut isinya', (
+    tester,
+  ) async {
+    await pasang(tester, const SiklusScreen());
+
+    await tester.ensureVisible(find.text('3').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('3').first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Tercatat: aliran haid, gejala'), findsOneWidget);
+    // Tanggal 3 belum tiba pada tanggal 1-2: tombolnya belum ada.
+    expect(
+      find.text('Ubah catatan'),
+      _hariIni.day >= 3 ? findsOneWidget : findsNothing,
+    );
+    expect(find.text('Ada catatan'), findsOneWidget);
+  });
+
+  testWidgets('siklus: pasangan tidak ditawari catatan harian', (tester) async {
+    await pasang(tester, const SiklusScreen(), sebagaiPasangan: true);
+
+    await tester.ensureVisible(find.text('3').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('3').first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.textContaining('Hari siklus 3'), findsOneWidget);
+    expect(find.text('Catat'), findsNothing);
+    expect(find.text('Ubah catatan'), findsNothing);
+    expect(find.textContaining('Tercatat'), findsNothing);
+    expect(find.text('Ada catatan'), findsNothing);
+  });
+
+  testWidgets('siklus: panah kalender meminta bulan lain', (tester) async {
+    final adaptor = await pasang(tester, const SiklusScreen());
+
+    await tester.ensureVisible(find.bySemanticsLabel('Bulan berikutnya'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.bySemanticsLabel('Bulan berikutnya'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.bulanDiminta, isNotNull);
+    expect(adaptor.bulanDiminta, isNot(_tgl(_hariIni).substring(0, 7)));
+  });
+
+  testWidgets('catatan harian: ubahan dikirim seutuhnya', (tester) async {
+    final adaptor = await pasang(tester, CatatanHariScreen(tanggal: _hariIni));
+
+    expect(find.text('Hari ini'), findsOneWidget);
+    expect(find.textContaining('Hari siklus 22'), findsOneWidget);
+    expect(find.text('Aliran haid'), findsOneWidget);
+
+    // Ringkasan memuat isi yang sudah dicatat; mengisi pindah ke halamannya.
+    expect(find.text('Sedang'), findsOneWidget);
+    expect(find.text('Banyak'), findsNothing);
+
+    await tester.tap(find.text('Aliran haid'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Banyak'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('SIMPAN'));
+    await tester.pump(const Duration(seconds: 1));
+
+    final terkirim = adaptor.catatanTerkirim!;
+
+    expect(terkirim['flow'], 'banyak');
+    // Isian lain yang sudah ada ikut terkirim, tidak hilang.
+    expect(terkirim['symptoms'], ['kram']);
+    expect(terkirim['moods'], ['tenang']);
+    expect(terkirim['pill_taken'], isNull);
+    expect(terkirim.containsKey('temperature_c'), isTrue);
+    expect(terkirim.containsKey('intimacy_climax'), isTrue);
+  });
+
+  testWidgets('catatan harian: gejala dipilih per kelompok', (tester) async {
+    final adaptor = await pasang(tester, CatatanHariScreen(tanggal: _hariIni));
+
+    await tester.tap(find.text('Gejala'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    // Kelompok dari katalog tampil sebagai bagian tersendiri.
+    expect(find.text('Kepala'), findsOneWidget);
+
+    await tester.tap(find.text('Migrain'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('SIMPAN'));
+    await tester.pump(const Duration(seconds: 1));
+
+    // Gejala lama dari kelompok lain tetap ada di samping yang baru.
+    expect(
+      adaptor.catatanTerkirim!['symptoms'],
+      unorderedEquals(['kram', 'migrain']),
+    );
+  });
+
+  testWidgets('catatan harian: pil KB tersimpan dengan sekali ketuk', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, CatatanHariScreen(tanggal: _hariIni));
+
+    await tester.ensureVisible(find.text('Pil KB'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Pil KB'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.catatanTerkirim!['pill_taken'], isTrue);
+    expect(adaptor.catatanTerkirim!['flow'], 'sedang');
+  });
+
+  testWidgets('catatan harian: tombol Akhir menandai haid selesai', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, CatatanHariScreen(tanggal: _hariIni));
+
+    await tester.tap(find.text('Akhir haid'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      adaptor.permintaan,
+      contains('PUT /api/cycle/days/${_tgl(_hariIni)}/period-end'),
+    );
   });
 
   testWidgets('uang: mengetuk transaksi membuka detail', (tester) async {
@@ -833,5 +1183,209 @@ void main() {
     expect(find.text('Bagian Raka'), findsOneWidget);
     expect(find.text('Ubah'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rata-rata: bulanan bawaan, bisa diganti mingguan/tahunan', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, const RataRataScreen());
+
+    expect(adaptor.periodeRataRata.last, 'month');
+    expect(find.text('RATA-RATA PER BULAN'), findsOneWidget);
+    expect(find.text('Rp 3.000.000'), findsWidgets);
+    expect(find.textContaining('Dari 2 bulan terakhir'), findsOneWidget);
+    expect(find.textContaining('Bulan ini sejauh ini'), findsOneWidget);
+
+    await tester.tap(find.text('Tahunan'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.periodeRataRata.last, 'year');
+    expect(find.text('RATA-RATA PER TAHUN'), findsOneWidget);
+    expect(find.textContaining('Baru ada satu tahun'), findsOneWidget);
+
+    await tester.tap(find.text('Mingguan'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.periodeRataRata.last, 'week');
+    expect(
+      find.text('Belum ada pengeluaran untuk dirata-rata.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('uang: dompet bersama disembunyikan, rata-rata tampil', (
+    tester,
+  ) async {
+    await pasang(tester, const UangScreen());
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Dompet bersama'), findsNothing);
+    expect(find.text('Rata-rata / bulan'), findsOneWidget);
+
+    await pasang(tester, const Scaffold(body: TambahPengeluaranSheet()));
+
+    expect(find.text('Dompet bersama'), findsNothing);
+  });
+
+  testWidgets('uang: pindah ke pribadi dan kembali ke bersama', (tester) async {
+    await pasang(tester, const UangScreen());
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(find.text('Pribadi'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Uang pribadi'), findsOneWidget);
+    expect(find.text('TANDAI LUNAS'), findsNothing);
+    expect(find.textContaining('Hanya kamu yang bisa melihat'), findsOneWidget);
+    expect(find.text('Rp 213.000'), findsOneWidget);
+    expect(
+      find.textContaining('Rata-rata per bulan Rp 240.000'),
+      findsOneWidget,
+    );
+    expect(find.text('Turun Rp 37.000 dari bulan lalu'), findsOneWidget);
+
+    // Kembali ke bersama: layar uang bersama yang tampil lagi.
+    await tester.tap(find.text('Bersama'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Uang bersama'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('laporan pribadi: dari endpoint pribadi, tanpa pembayar', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, LaporanScreen.untukPribadi());
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      adaptor.permintaan,
+      contains('GET /api/personal-expenses/report'),
+    );
+    expect(
+      adaptor.permintaan.where((p) => p.endsWith('/transactions/report')),
+      isEmpty,
+    );
+    expect(find.text('Uang pribadi'), findsOneWidget);
+    expect(find.text('Laporan ini hanya terlihat olehmu.'), findsOneWidget);
+    expect(find.text('Rp 213.000'), findsOneWidget);
+    expect(find.text('PEMBAGIAN PEMBAYAR'), findsNothing);
+    expect(find.text('Belum ada anggaran bulanan'), findsNothing);
+    expect(find.text('Turun Rp 37.000 dari bulan lalu'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('uang: segmen mengikuti posisi geser', (tester) async {
+    await pasang(tester, const UangScreen());
+    await tester.pump(const Duration(seconds: 1));
+
+    final segmen = find.byType(PemilihModeUang);
+    double kiriPil() => tester
+        .getTopLeft(
+          find
+              .descendant(of: segmen, matching: find.byType(Positioned))
+              .first,
+        )
+        .dx;
+    final awal = kiriPil();
+
+    // Geser setengah jalan tanpa melepas jari: pil ikut berada di tengah.
+    final lebar = tester.getSize(find.byType(PageView)).width;
+    final gerak = await tester.startGesture(
+      tester.getCenter(find.byType(PageView)),
+    );
+    await gerak.moveBy(Offset(-lebar * .2, 0));
+    await tester.pump();
+    await gerak.moveBy(Offset(-lebar * .2, 0));
+    await tester.pump();
+
+    final tengah = kiriPil();
+    expect(tengah, greaterThan(awal));
+
+    // Lewat setengah layar lalu dilepas: pil berlanjut sampai "Pribadi".
+    await gerak.moveBy(Offset(-lebar * .4, 0));
+    await tester.pump();
+    await gerak.up();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(kiriPil(), greaterThan(tengah));
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('uang: geser kiri-kanan berpindah bersama ↔ pribadi', (
+    tester,
+  ) async {
+    await pasang(tester, const UangScreen());
+    await tester.pump(const Duration(seconds: 1));
+
+    // Segmen berada di luar halaman yang bergeser: hanya ada satu, dan diam.
+    expect(find.byType(PemilihModeUang), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PageView),
+        matching: find.byType(PemilihModeUang),
+      ),
+      findsNothing,
+    );
+    final posisiSegmen = tester.getTopLeft(find.byType(PemilihModeUang));
+
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Uang pribadi'), findsOneWidget);
+    expect(find.text('Uang bersama'), findsNothing);
+    expect(tester.getTopLeft(find.byType(PemilihModeUang)), posisiSegmen);
+
+    await tester.fling(find.byType(PageView), const Offset(400, 0), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Uang bersama'), findsOneWidget);
+    expect(find.text('Uang pribadi'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('uang pribadi: lembar tambah mengirim pengeluaran pribadi', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, const Scaffold(body: LembarPribadi()));
+
+    await tester.enterText(find.byType(TextField).at(0), '45000');
+    await tester.enterText(find.byType(TextField).at(1), 'Buku');
+    await tester.tap(find.text('Hiburan'));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('SIMPAN'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('SIMPAN'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.pribadiTerkirim, hasLength(1));
+    expect(
+      adaptor.pribadiTerkirim.single,
+      startsWith('POST /api/personal-expenses '),
+    );
+    expect(adaptor.pribadiTerkirim.single, contains('"amount":45000'));
+    expect(adaptor.pribadiTerkirim.single, contains('"category":"Hiburan"'));
+    expect(adaptor.pribadiTerkirim.single, contains('"title":"Buku"'));
+    await tester.pump(const Duration(seconds: 2));
   });
 }

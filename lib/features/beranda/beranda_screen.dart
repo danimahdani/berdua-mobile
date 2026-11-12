@@ -11,6 +11,7 @@ import '../../widgets/hiasan_pasangan.dart';
 import '../../widgets/potret.dart';
 import '../../widgets/skeleton.dart';
 import '../bersama/bersama_cubit.dart';
+import '../laporan/rata_rata_cubit.dart';
 import '../money/tambah_pengeluaran_sheet.dart';
 import 'beranda_cubit.dart';
 
@@ -299,6 +300,8 @@ class _LabelKartu extends StatelessWidget {
   }
 }
 
+/// Ringkasan uang di beranda: total pengeluaran bulan ini dan rata-ratanya.
+/// Utang hanya disebut kalau memang ada.
 class _KartuUang extends StatelessWidget {
   const _KartuUang({required this.data});
 
@@ -307,14 +310,36 @@ class _KartuUang extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final periode = context.watch<PeriodeRataRataCubit>().state;
+    final rataRata = context.watch<RataRataCubit>().state.nilai;
     final pasangan = data.partner == null || data.partner!.name.isEmpty
         ? 'pasangan'
         : data.partner!.name;
-    final kalimat = data.lunas
-        ? 'Tidak ada utang'
-        : (data.balance > 0
-              ? 'Kamu berutang ke $pasangan'
-              : '${kapitalAwal(pasangan)} berutang ke kamu');
+    final utang = data.lunas
+        ? null
+        : '${data.balance > 0 ? "Kamu berutang ke $pasangan" : "${kapitalAwal(pasangan)} berutang ke kamu"} '
+              '${Rupiah.format(data.balance.abs())}';
+
+    Widget angka(String label, String nilai, double ukuran) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.labelSmall?.copyWith(fontSize: 13),
+        ),
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            nilai,
+            style: text.headlineLarge?.copyWith(fontSize: ukuran, height: 1.1),
+          ),
+        ),
+      ],
+    );
 
     return KartuBerdua(
       radius: Radii.cardBesar,
@@ -324,28 +349,62 @@ class _KartuUang extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _LabelKartu(
+          const _LabelKartu(
             ikon: Icons.account_balance_wallet_outlined,
             latar: BerduaColors.rose,
             warnaIkon: BerduaColors.ink,
-            teks: kalimat,
+            teks: 'Pengeluaran bersama',
           ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              Rupiah.format(data.balance.abs()),
-              style: text.headlineLarge?.copyWith(fontSize: 34, height: 1.1),
+          const SizedBox(height: Gap.md),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 11,
+                  child: angka(
+                    'Total ${TanggalId.month(DateTime.now())}',
+                    Rupiah.format(data.monthTotal),
+                    30,
+                  ),
+                ),
+                const VerticalDivider(
+                  width: Gap.xl,
+                  thickness: 1,
+                  color: BerduaColors.line,
+                ),
+                Expanded(
+                  flex: 10,
+                  child: Semantics(
+                    button: true,
+                    label: 'Lihat rata-rata pengeluaran',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => context.push('/rata-rata'),
+                      child: angka(
+                        'Rata-rata / ${periode.satuan}',
+                        rataRata == null
+                            ? '–'
+                            : Rupiah.format(rataRata.rataRata),
+                        24,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Dompet ${Rupiah.format(data.walletBalance)} · '
-            '${TanggalId.month(DateTime.now())} '
-            '${Rupiah.format(data.monthTotal)}',
-            style: text.labelSmall?.copyWith(fontSize: 14),
-          ),
+          if (utang != null) ...[
+            const SizedBox(height: Gap.md),
+            Text(
+              utang,
+              style: text.labelSmall?.copyWith(
+                fontSize: 14,
+                color: BerduaColors.roseText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );

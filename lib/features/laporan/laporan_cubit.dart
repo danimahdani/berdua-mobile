@@ -23,10 +23,9 @@ class Laporan {
   });
 
   factory Laporan.fromJson(Map<String, dynamic> json) {
+    // Bulan tanpa pengeluaran: petanya datang sebagai `[]`, lihat [petaJson].
     Map<String, int> angka(String key) =>
-        (json[key] as Map<String, dynamic>? ?? {}).map(
-          (k, v) => MapEntry(k, (v as num).toInt()),
-        );
+        petaJson(json[key]).map((k, v) => MapEntry(k, (v as num).toInt()));
 
     return Laporan(
       year: json['year'] as int,
@@ -98,12 +97,16 @@ class BulanLaporanCubit extends Cubit<DateTime> {
 
 /// Laporan untuk bulan di [BulanLaporanCubit]; dimuat ulang tiap bulannya
 /// berganti, dengan isi bulan sebelumnya bertahan selama bulan baru dimuat.
+///
+/// [jalur] `/personal-expenses/report` dipakai untuk laporan uang pribadi:
+/// bentuk jawabannya sama, hanya isinya milik akun ini saja.
 class LaporanCubit extends MuatanCubit<Laporan> {
-  LaporanCubit(this._dio, this._bulan) {
+  LaporanCubit(this._dio, this._bulan, {this.jalur = '/transactions/report'}) {
     _langganan = _bulan.stream.listen((_) => segarkan());
   }
 
   final Dio _dio;
+  final String jalur;
   final BulanLaporanCubit _bulan;
   late final StreamSubscription<DateTime> _langganan;
 
@@ -112,11 +115,7 @@ class LaporanCubit extends MuatanCubit<Laporan> {
     final bulan = _bulan.state;
     final kunci = '${bulan.year}-${bulan.month.toString().padLeft(2, '0')}';
 
-    final data = await _dio.send(
-      'GET',
-      '/transactions/report',
-      query: {'month': kunci},
-    );
+    final data = await _dio.send('GET', jalur, query: {'month': kunci});
 
     return Laporan.fromJson(data);
   }

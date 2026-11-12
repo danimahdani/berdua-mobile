@@ -10,7 +10,10 @@ import '../../widgets/berdua_widgets.dart';
 import '../../widgets/hiasan_pasangan.dart';
 import 'sesi_cubit.dart';
 
-/// Layar 03 (perkenalan), 04 (profil) dan 05 (undang pasangan).
+/// Layar 03 (perkenalan) dan 04 (profil).
+///
+/// Tidak ada langkah kode undangan: aplikasi ini hanya untuk dua nomor yang
+/// terdaftar, dan backend memasangkan keduanya sendiri saat masuk.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -24,7 +27,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _langkah = 0;
   bool? _catatSiklus;
   bool _memuat = false;
-  bool _disalin = false;
   String? _galat;
   DateTime _mulai = DateTime.now();
 
@@ -52,7 +54,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         catatSiklus: _catatSiklus ?? false,
       );
 
-      if (mounted) _ke(2);
+      // Profil terisi = onboarding selesai. Memuat ulang profil membuat
+      // router berpindah sendiri ke beranda.
+      if (mounted) await context.read<SesiCubit>().muatProfil();
     } on ApiException catch (error) {
       if (mounted) setState(() => _galat = error.message);
     } finally {
@@ -62,14 +66,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sesi = context.watch<SesiCubit>().state;
     final text = Theme.of(context).textTheme;
 
-    final isi = switch (_langkah) {
-      0 => _perkenalan(text),
-      1 => _profil(text),
-      _ => _undang(text, sesi),
-    };
+    final isi = _langkah == 0 ? _perkenalan(text) : _profil(text);
 
     return Scaffold(
       body: LatarBerdua(
@@ -123,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return [
       const _DuaKartu(),
       const SizedBox(height: 18),
-      const TitikLangkah(aktif: 0),
+      const TitikLangkah(aktif: 0, jumlah: 2),
       const SizedBox(height: 18),
       Text(
         'Satu catatan untuk berdua',
@@ -149,7 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return [
       _kepala('Kenalan dulu', () => _ke(0)),
       const SizedBox(height: Gap.xl),
-      const TitikLangkah(aktif: 1),
+      const TitikLangkah(aktif: 1, jumlah: 2),
       const SizedBox(height: Gap.xl),
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,112 +195,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const Spacer(),
       const SizedBox(height: Gap.xl),
       TombolUtama(
-        label: 'Lanjut',
+        label: 'Masuk ke Berdua',
         memuat: _memuat,
         onPressed: siap ? _simpanProfil : null,
       ),
-    ];
-  }
-
-  /// Layar 05.
-  List<Widget> _undang(TextTheme text, SesiState sesi) {
-    final kode = sesi.couple?.inviteCode ?? '—';
-    final nama = sesi.user?.name ?? '';
-    final pasangan = sesi.partner;
-
-    return [
-      _kepala('Undang pasangan', () => _ke(1)),
-      const SizedBox(height: Gap.lg),
-      const TitikLangkah(aktif: 2),
-      const SizedBox(height: Gap.lg),
-      // Ilustrasi undangan masih tempat kosong; stiker surat mengisinya dulu.
-      Container(
-        height: 150,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: BerduaColors.dinda,
-          borderRadius: BorderRadius.circular(Radii.cardWhite),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stiker.sedang(JenisStiker.heart),
-            SizedBox(width: Gap.lg),
-            Stiker(JenisStiker.mail, ukuran: 84),
-            SizedBox(width: Gap.lg),
-            Stiker.sedang(JenisStiker.flower),
-          ],
-        ),
-      ),
-      const SizedBox(height: Gap.xxl),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: KartuRose(
-          miring: true,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
-          child: Column(
-            children: [
-              AngkaBerbingkai(kode, ukuran: 30),
-              const SizedBox(height: 10),
-              Text(
-                pasangan != null
-                    ? 'Kalian sudah terhubung. Kode ini jadi tanda pasangan '
-                          'kalian.'
-                    : 'Kirim kode ini ke pasanganmu'
-                          '${nama.isEmpty ? "" : ", $nama"}. Berlaku 48 jam.',
-                textAlign: TextAlign.center,
-                style: text.bodyLarge?.copyWith(height: 1.45),
-              ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(height: Gap.xxl),
-      TombolSekunder(
-        label: _disalin ? 'Kode disalin' : 'Bagikan kode',
-        ikon: _disalin ? Icons.check_rounded : Icons.copy_rounded,
-        onPressed: () {
-          Clipboard.setData(ClipboardData(text: kode));
-          setState(() => _disalin = true);
-          tampilkanToast(context, 'Kode disalin');
-        },
-      ),
-      if (pasangan != null) ...[
-        const SizedBox(height: Gap.lg),
-        KartuBerdua(
-          radius: Radii.button,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Row(
-            children: [
-              const Stiker.kecil(JenisStiker.check),
-              const SizedBox(width: Gap.md),
-              Expanded(
-                child: Text(
-                  'Terhubung dengan '
-                  '${pasangan.name.isEmpty ? "pasanganmu" : pasangan.name}',
-                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-      const Spacer(),
-      const SizedBox(height: Gap.xl),
-      TombolUtama(
-        label: pasangan != null ? 'Selesai' : 'Masuk ke Berdua',
-        // Router berpindah sendiri setelah onboarding selesai; memuat ulang
-        // profil cukup untuk memicunya.
-        onPressed: () => context.read<SesiCubit>().muatProfil(),
-      ),
-      if (pasangan == null) ...[
-        const SizedBox(height: Gap.md),
-        Text(
-          'Belum sempat mengundang? Kodenya tetap ada di Profil.',
-          textAlign: TextAlign.center,
-          style: text.bodySmall,
-        ),
-      ],
     ];
   }
 }

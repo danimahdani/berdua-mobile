@@ -17,7 +17,24 @@ import 'laporan_cubit.dart';
 /// bersegmen dengan ubin bernilai, kategori = ubin bernilai (bukan warna
 /// saja), tren mingguan = garis (besaran sepanjang waktu).
 class LaporanScreen extends StatelessWidget {
-  const LaporanScreen({super.key});
+  const LaporanScreen({super.key, this.pribadi = false});
+
+  /// true = laporan uang pribadi: tanpa anggaran dan pembagian pembayar.
+  final bool pribadi;
+
+  /// Laporan uang pribadi dengan cubit sendiri yang hidup selama layarnya
+  /// terbuka, jadi isinya selalu baru dan tidak tercampur laporan bersama.
+  static Widget untukPribadi() => BlocProvider(
+    create: (_) => BulanLaporanCubit(),
+    child: BlocProvider(
+      create: (context) => LaporanCubit(
+        context.read(),
+        context.read<BulanLaporanCubit>(),
+        jalur: '/personal-expenses/report',
+      ),
+      child: const LaporanScreen(pribadi: true),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +54,15 @@ class LaporanScreen extends StatelessWidget {
         ),
         data: (data) => LayarBerdua(
           judul: 'Laporan',
-          kepala: _Kepala(bulan: bulan),
+          kepala: _Kepala(bulan: bulan, pribadi: pribadi),
           kunciPantul: bulan,
           children: [
             _PemilihBulan(bulan: bulan),
             const SizedBox(height: Gap.betweenCards),
+            if (pribadi) ...[
+              const _CatatanPribadi(),
+              const SizedBox(height: Gap.betweenCards),
+            ],
             if (data.kosong)
               KartuBerdua(
                 padding: const EdgeInsets.all(Gap.xxl),
@@ -60,10 +81,12 @@ class LaporanScreen extends StatelessWidget {
                 ),
               )
             else ...[
-              _Total(data: data),
+              _Total(data: data, pribadi: pribadi),
               const SizedBox(height: Gap.betweenCards),
-              _PembagianPembayar(data: data),
-              const SizedBox(height: Gap.betweenCards),
+              if (!pribadi) ...[
+                _PembagianPembayar(data: data),
+                const SizedBox(height: Gap.betweenCards),
+              ],
               _Kategori(data: data),
               const SizedBox(height: Gap.betweenCards),
               _TrenMingguan(data: data),
@@ -77,11 +100,47 @@ class LaporanScreen extends StatelessWidget {
   }
 }
 
+/// Pengingat bahwa laporan ini hanya untuk pemilik akun.
+class _CatatanPribadi extends StatelessWidget {
+  const _CatatanPribadi();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: BerduaColors.rakaSoft,
+        borderRadius: BorderRadius.circular(Radii.input),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.lock_outline_rounded,
+            size: 18,
+            color: ChartColors.pasanganTeks,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Laporan ini hanya terlihat olehmu.',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 13,
+                color: ChartColors.pasanganTeks,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Kepala laporan: kembali, judul dua baris rata kiri, dan pil bulan.
 class _Kepala extends StatelessWidget {
-  const _Kepala({required this.bulan});
+  const _Kepala({required this.bulan, this.pribadi = false});
 
   final DateTime bulan;
+  final bool pribadi;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +155,7 @@ class _Kepala extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Uang bersama',
+                pribadi ? 'Uang pribadi' : 'Uang bersama',
                 style: text.labelSmall?.copyWith(fontSize: 12),
               ),
               Text(
@@ -238,9 +297,10 @@ class _UbinKrem extends StatelessWidget {
 /// Angka utama. Satu besaran dengan pembandingnya bukan pekerjaan grafik;
 /// cincin hanya muncul kalau ada anggaran untuk dibandingkan.
 class _Total extends StatelessWidget {
-  const _Total({required this.data});
+  const _Total({required this.data, this.pribadi = false});
 
   final Laporan data;
+  final bool pribadi;
 
   @override
   Widget build(BuildContext context) {
@@ -326,15 +386,18 @@ class _Total extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      adaAnggaran
-                          ? 'dari anggaran ${Rupiah.format(data.budget!)}'
-                          : 'Belum ada anggaran bulanan',
-                      style: text.labelSmall?.copyWith(
-                        color: BerduaColors.label,
+                    // Uang pribadi tidak punya anggaran bersama.
+                    if (!pribadi) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        adaAnggaran
+                            ? 'dari anggaran ${Rupiah.format(data.budget!)}'
+                            : 'Belum ada anggaran bulanan',
+                        style: text.labelSmall?.copyWith(
+                          color: BerduaColors.label,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

@@ -23,8 +23,14 @@ import 'package:flutter/foundation.dart';
 abstract final class Env {
   static const _override = String.fromEnvironment('API_BASE_URL');
 
+  /// Backend produksi. Build release selalu ke sini kecuali ditimpa, supaya
+  /// APK tidak pernah diam-diam menunjuk alamat pengembangan.
+  static const _produksi = 'https://berdua.danimahdani.dev';
+
   static String get apiBaseUrl {
     if (_override.isNotEmpty) return '$_override/api';
+
+    if (kReleaseMode) return '$_produksi/api';
 
     // Web dan desktop Windows menembus ke WSL lewat localhost forwarding.
     if (kIsWeb) return 'http://localhost:8000/api';
