@@ -7,6 +7,7 @@ import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/muat_lagi.dart';
 import 'pribadi_cubit.dart';
 
 /// Pemilih di atas tab Uang: uang bersama atau uang pribadi.
@@ -190,7 +191,7 @@ class _Isi extends StatelessWidget {
               ],
             ),
           )
-        else
+        else ...[
           for (final c in data.semuaCatatan) ...[
             if (c is PemasukanPribadi)
               _BarisPemasukan(pemasukan: c)
@@ -198,6 +199,12 @@ class _Isi extends StatelessWidget {
               _Baris(pengeluaran: c as PengeluaranPribadi),
             const SizedBox(height: Gap.sm),
           ],
+          // 10 catatan per muat; 10 berikutnya saat digulir ke bawah.
+          MuatLagi(
+            ada: context.read<PribadiCubit>().adaLagi,
+            onMuatLagi: context.read<PribadiCubit>().muatLagi,
+          ),
+        ],
       ],
     );
   }

@@ -13,6 +13,7 @@ import '../auth/sesi_cubit.dart';
 import '../laporan/rata_rata_cubit.dart';
 import '../pribadi/pribadi_cubit.dart';
 import '../pribadi/pribadi_screen.dart';
+import '../../widgets/muat_lagi.dart';
 import 'uang_cubit.dart';
 import 'tambah_pengeluaran_sheet.dart';
 
@@ -293,11 +294,17 @@ class _Isi extends StatelessWidget {
               ],
             ),
           )
-        else
+        else ...[
           for (final transaksi in data.transaksi) ...[
             _BarisTransaksi(transaksi: transaksi, sesi: sesi),
             const SizedBox(height: Gap.sm),
           ],
+          // 10 transaksi per muat; 10 berikutnya saat digulir ke bawah.
+          MuatLagi(
+            ada: context.read<UangCubit>().adaLagi,
+            onMuatLagi: context.read<UangCubit>().muatLagi,
+          ),
+        ],
       ],
     );
   }

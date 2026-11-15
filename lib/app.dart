@@ -298,6 +298,13 @@ class _BerduaAppState extends State<BerduaApp> {
       context.read<BerandaCubit>().segarkan();
       context.read<KuisCubit>().segarkan();
     }
+
+    // Pil KB (mis. pasangan baru saja minum): kartu pil dan lonceng ikut
+    // diperbarui tanpa perlu membuka ulang layarnya.
+    if (pesan.rute == '/siklus') {
+      context.read<BerandaCubit>().segarkan();
+      context.read<PilCubit>().segarkan();
+    }
   }
 
   @override

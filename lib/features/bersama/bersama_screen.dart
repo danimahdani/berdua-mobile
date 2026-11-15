@@ -11,6 +11,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
 import '../auth/sesi_cubit.dart';
+import '../../widgets/muat_lagi.dart';
 import 'bersama_cubit.dart';
 
 /// Layar 16-22 dalam satu tab, dipilih lewat segmen di atas.
@@ -1397,6 +1398,8 @@ class _JurnalState extends State<_Jurnal> {
           ),
           const SizedBox(height: Gap.md),
         ],
+        // 10 catatan per muat; 10 berikutnya saat digulir ke bawah.
+        MuatLagi(ada: jurnal.adaLagi, onMuatLagi: jurnal.muatLagi),
       ],
     );
   }

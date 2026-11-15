@@ -208,6 +208,14 @@ class RingkasanUang {
 
   bool get lunas => balance == 0;
 
+  /// Ringkasan [baru] dengan daftar transaksi lama di depannya (muat lagi).
+  RingkasanUang sambung(RingkasanUang baru) => RingkasanUang(
+    transaksi: [...transaksi, ...baru.transaksi],
+    balance: baru.balance,
+    walletBalance: baru.walletBalance,
+    monthTotal: baru.monthTotal,
+  );
+
   /// §5.2: tampilan menyesuaikan siapa yang melihat.
   String get kalimatUtang {
     if (lunas) return 'Tidak ada utang';

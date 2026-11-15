@@ -529,6 +529,7 @@ class _KalenderState extends State<_Kalender> {
       for (var i = 0; i < kosong; i++) null,
       for (final h in hari)
         _SelHari(
+          key: ValueKey('sel-${h.tanggal.day}'),
           hari: h,
           dipilih: identical(h, terpilih),
           onTap: () => setState(() => _dipilih = h.tanggal),
@@ -609,7 +610,7 @@ class _KalenderState extends State<_Kalender> {
                         Expanded(
                           child:
                               (i < sel.length ? sel[i] : null) ??
-                              const SizedBox(height: Sizes.calendarCell),
+                              const SizedBox(height: _tinggiSel),
                         ),
                       ],
                     ],
@@ -618,13 +619,16 @@ class _KalenderState extends State<_Kalender> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          // Penanda catatan ikut terlihat oleh pasangan yang dibagi.
-          const _Legenda(adaCatatan: true),
-          if (terpilih != null) ...[
-            const SizedBox(height: Gap.md),
-            _RincianHari(hari: terpilih, bisaUbah: data.bisaUbah),
-          ],
+          const SizedBox(height: Gap.md),
+          // Keterangan warna ada di balik tombol (i), seperti kalender
+          // aplikasi siklus pada umumnya; rinciannya membawa tombol itu.
+          if (terpilih != null)
+            _RincianHari(hari: terpilih, bisaUbah: data.bisaUbah)
+          else
+            const Align(
+              alignment: Alignment.centerRight,
+              child: _TombolKeterangan(),
+            ),
         ],
       ),
     );
@@ -674,17 +678,25 @@ class _RincianHari extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${TanggalId.short(hari.tanggal)}'
-            '${hari.hariKe > 0 ? " · Hari siklus ${hari.hariKe}" : ""}',
-            style: text.bodyLarge?.copyWith(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${TanggalId.short(hari.tanggal)}'
+                  '${hari.hariKe > 0 ? " · Hari siklus ${hari.hariKe}" : ""}',
+                  style: text.bodyLarge?.copyWith(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const _TombolKeterangan(),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
             'Fase ${hari.fase}'
+            '${hari.ovulasi ? " · perkiraan hari ovulasi" : ""}'
             '${peluang == null ? "" : " · peluang hamil ${peluang.label.toLowerCase()}"}'
             '${hari.perkiraan ? " (perkiraan)" : ""}',
             style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
@@ -737,8 +749,78 @@ class _RincianHari extends StatelessWidget {
   }
 }
 
+/// Tinggi sel kalender: muat tanggal besar dan nomor hari siklus kecil.
+const _tinggiSel = 54.0;
+
+/// Warna sel per fase, memakai warna fase tema Berdua.
+({Color latar, Color teks, Color kecil}) _warnaSel(HariSiklus hari) =>
+    switch (hari.fase) {
+      'haid' when hari.perkiraan => (
+        latar: BerduaColors.roseSoft,
+        teks: BerduaColors.roseText,
+        kecil: BerduaColors.roseText,
+      ),
+      'haid' => (
+        latar: BerduaColors.period,
+        teks: BerduaColors.ink,
+        kecil: BerduaColors.periodText,
+      ),
+      'subur' => (
+        latar: BerduaColors.rakaSoft,
+        teks: BerduaColors.ink,
+        kecil: BerduaColors.fertileText,
+      ),
+      _ => (
+        latar: BerduaColors.card,
+        teks: BerduaColors.ink,
+        kecil: BerduaColors.label,
+      ),
+    };
+
+/// Penanda kecil di pojok kiri atas sel.
+class _IkonSel extends StatelessWidget {
+  const _IkonSel.subur() : ovulasi = false;
+  const _IkonSel.ovulasi() : ovulasi = true;
+
+  final bool ovulasi;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ovulasi) {
+      return const Icon(
+        Icons.eco_rounded,
+        size: 12,
+        color: BerduaColors.fertileText,
+      );
+    }
+
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: BerduaColors.ovulasi,
+        shape: BoxShape.circle,
+        border: Border.all(color: BerduaColors.card, width: 1.5),
+      ),
+    );
+  }
+}
+
+/// Penanda "ada catatan harian".
+class _BintangCatatan extends StatelessWidget {
+  const _BintangCatatan();
+
+  @override
+  Widget build(BuildContext context) => const Icon(
+    Icons.auto_awesome_rounded,
+    size: 11,
+    color: BerduaColors.roseText,
+  );
+}
+
 class _SelHari extends StatelessWidget {
   const _SelHari({
+    super.key,
     required this.hari,
     required this.dipilih,
     required this.onTap,
@@ -750,28 +832,16 @@ class _SelHari extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Hari perkiraan memakai warna yang lebih lembut daripada yang tercatat.
-    final (latar, warna) = switch (hari.fase) {
-      'haid' when hari.perkiraan => (
-        BerduaColors.roseSoft,
-        BerduaColors.periodText,
-      ),
-      'haid' => (BerduaColors.rose, BerduaColors.ink),
-      'subur' when hari.perkiraan => (
-        BerduaColors.rakaSoft,
-        BerduaColors.fertileText,
-      ),
-      'subur' => (BerduaColors.rakaKuat, BerduaColors.ink),
-      'luteal' => (BerduaColors.netral, BerduaColors.ink),
-      _ => (Colors.transparent, BerduaColors.ink),
-    };
-
+    final warna = _warnaSel(hari);
     final peluang = hari.peluangHamil;
     final adaCatatan = hari.penanda.isNotEmpty;
+    final polos = warna.latar == BerduaColors.card;
 
     return Semantics(
       label:
           '${TanggalId.short(hari.tanggal)}, ${hari.fase}'
+          '${hari.hariKe > 0 ? ", hari siklus ${hari.hariKe}" : ""}'
+          '${hari.ovulasi ? ", perkiraan ovulasi" : ""}'
           '${peluang == null ? "" : ", peluang hamil ${peluang.label.toLowerCase()}"}'
           '${hari.perkiraan ? ", perkiraan" : ""}'
           '${adaCatatan ? ", ada catatan" : ""}'
@@ -783,41 +853,58 @@ class _SelHari extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          height: Sizes.calendarCell,
+          height: _tinggiSel,
+          padding: const EdgeInsets.fromLTRB(5, 4, 5, 3),
           decoration: BoxDecoration(
-            color: latar,
-            borderRadius: BorderRadius.circular(Radii.chip),
-            // Dipilih = garis ungu tebal; hari ini = garis tinta.
+            color: warna.latar,
+            borderRadius: BorderRadius.circular(10),
+            // Dipilih = garis ungu tebal; hari ini = garis tinta; hari biasa
+            // bergaris tipis supaya tetap terbaca sebagai kotak tanggal.
             border: dipilih
-                ? Border.all(color: BerduaColors.rakaText, width: 3)
-                : (hari.hariIni
-                      ? Border.all(color: BerduaColors.ink, width: 2)
-                      : null),
+                ? Border.all(color: BerduaColors.rakaText, width: 2.5)
+                : hari.hariIni
+                ? Border.all(color: BerduaColors.ink, width: 2)
+                : (polos ? Border.all(color: BerduaColors.line) : null),
           ),
           child: Stack(
-            alignment: Alignment.center,
             children: [
-              Text(
-                '${hari.tanggal.day}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 15,
-                  fontWeight: hari.hariIni ? FontWeight.w700 : FontWeight.w500,
-                  color: warna,
-                ),
-              ),
-              // Titik kecil: ada catatan harian di tanggal ini.
-              if (adaCatatan)
+              if (hari.ovulasi)
+                const Positioned(left: 0, top: 0, child: _IkonSel.ovulasi())
+              else if (hari.fase == 'subur')
+                const Positioned(left: 0, top: 0, child: _IkonSel.subur()),
+              // Nomor hari siklus di pojok kanan atas.
+              if (hari.hariKe > 0)
                 Positioned(
-                  bottom: 4,
-                  child: Container(
-                    width: 5,
-                    height: 5,
-                    decoration: const BoxDecoration(
-                      color: BerduaColors.ink,
-                      shape: BoxShape.circle,
+                  right: 0,
+                  top: 0,
+                  child: Text(
+                    '${hari.hariKe}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1.1,
+                      fontWeight: FontWeight.w500,
+                      color: warna.kecil,
                     ),
                   ),
                 ),
+              // Tanggal besar di kiri bawah.
+              Positioned(
+                left: 0,
+                bottom: 0,
+                child: Text(
+                  '${hari.tanggal.day}',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontSize: 17,
+                    height: 1.1,
+                    fontWeight: hari.hariIni
+                        ? FontWeight.w800
+                        : FontWeight.w600,
+                    color: warna.teks,
+                  ),
+                ),
+              ),
+              if (adaCatatan)
+                const Positioned(right: 0, bottom: 1, child: _BintangCatatan()),
             ],
           ),
         ),
@@ -826,73 +913,164 @@ class _SelHari extends StatelessWidget {
   }
 }
 
-class _Legenda extends StatelessWidget {
-  const _Legenda({this.adaCatatan = false});
+/// Tombol (i) yang membuka keterangan warna dan penanda kalender.
+class _TombolKeterangan extends StatelessWidget {
+  const _TombolKeterangan();
 
-  /// true untuk pencatat: titik "ada catatan" ikut dijelaskan.
-  final bool adaCatatan;
+  @override
+  Widget build(BuildContext context) => TombolIkon(
+    ikon: Icons.info_outline_rounded,
+    keterangan: 'Keterangan kalender',
+    ukuran: 36,
+    onTap: () => bukaLembar<void>(context, (_) => const _LembarKeterangan()),
+  );
+}
+
+class _LembarKeterangan extends StatelessWidget {
+  const _LembarKeterangan();
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
 
-    Widget item(String label, {Color? warna}) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: warna,
-            borderRadius: BorderRadius.circular(5),
-            // Tanpa warna = penanda "hari ini": hanya garis tinta.
-            border: warna == null
-                ? Border.all(color: BerduaColors.ink, width: 2)
-                : null,
+    Widget contoh({
+      Color latar = BerduaColors.card,
+      Border? garis,
+      Widget? ikon,
+      Color teks = BerduaColors.ink,
+    }) => Container(
+      width: 40,
+      height: 40,
+      padding: const EdgeInsets.fromLTRB(4, 3, 4, 2),
+      decoration: BoxDecoration(
+        color: latar,
+        borderRadius: BorderRadius.circular(9),
+        border: garis ?? Border.all(color: BerduaColors.line),
+      ),
+      child: Stack(
+        children: [
+          if (ikon != null) Positioned(left: 0, top: 0, child: ikon),
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: Text(
+              '9',
+              style: text.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: teks,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: text.labelSmall?.copyWith(
-            fontSize: 12,
-            color: BerduaColors.label,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
 
-    return Wrap(
-      spacing: Gap.md,
-      runSpacing: 6,
-      children: [
-        item('Haid', warna: BerduaColors.rose),
-        item('Masa subur', warna: BerduaColors.rakaKuat),
-        item('Luteal', warna: BerduaColors.netral),
-        item('Hari ini'),
-        if (adaCatatan)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 5,
-                height: 5,
-                margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                decoration: const BoxDecoration(
-                  color: BerduaColors.ink,
-                  shape: BoxShape.circle,
+    Widget baris(Widget contohSel, String judul, String isi) => Padding(
+      padding: const EdgeInsets.only(bottom: Gap.md),
+      child: Row(
+        children: [
+          contohSel,
+          const SizedBox(width: Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  judul,
+                  style: text.bodyLarge?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'Ada catatan',
-                style: text.labelSmall?.copyWith(
-                  fontSize: 12,
-                  color: BerduaColors.label,
-                ),
-              ),
-            ],
+                Text(isi, style: text.labelSmall?.copyWith(height: 1.35)),
+              ],
+            ),
           ),
+        ],
+      ),
+    );
+
+    return IsiLembar(
+      judul: 'Keterangan kalender',
+      children: [
+        Column(
+          children: [
+            baris(
+              contoh(
+                latar: BerduaColors.period,
+                garis: Border.all(color: BerduaColors.period),
+              ),
+              'Haid',
+              'Hari haid yang sudah dicatat.',
+            ),
+            baris(
+              contoh(
+                latar: BerduaColors.roseSoft,
+                garis: Border.all(color: BerduaColors.roseSoft),
+                teks: BerduaColors.roseText,
+              ),
+              'Perkiraan haid',
+              'Perkiraan haid berikutnya dari rata-rata siklus.',
+            ),
+            baris(
+              contoh(
+                latar: BerduaColors.rakaSoft,
+                garis: Border.all(color: BerduaColors.rakaSoft),
+                ikon: const _IkonSel.subur(),
+              ),
+              'Masa subur',
+              'Peluang hamil tinggi.',
+            ),
+            baris(
+              contoh(
+                latar: BerduaColors.rakaSoft,
+                garis: Border.all(color: BerduaColors.rakaSoft),
+                ikon: const _IkonSel.ovulasi(),
+              ),
+              'Hari ovulasi',
+              'Perkiraan, di tengah masa subur.',
+            ),
+            baris(
+              contoh(
+                ikon: const Padding(
+                  padding: EdgeInsets.only(left: 18),
+                  child: _BintangCatatan(),
+                ),
+              ),
+              'Ada catatan',
+              'Ada catatan harian di tanggal ini.',
+            ),
+            baris(
+              contoh(garis: Border.all(color: BerduaColors.ink, width: 2)),
+              'Hari ini',
+              'Ketuk tanggal mana saja untuk melihat rinciannya.',
+            ),
+            baris(
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.topRight,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: BerduaColors.card,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: BerduaColors.line),
+                ),
+                child: const Text(
+                  '20',
+                  style: TextStyle(fontSize: 10, color: BerduaColors.label),
+                ),
+              ),
+              'Angka kecil',
+              'Hari ke berapa dalam siklus.',
+            ),
+          ],
+        ),
+        Text(
+          'Semua perkiraan dihitung dari kalender saja, bukan alat '
+          'kontrasepsi.',
+          style: text.labelSmall?.copyWith(height: 1.4),
+        ),
       ],
     );
   }

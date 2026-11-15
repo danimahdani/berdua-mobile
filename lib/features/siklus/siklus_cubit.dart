@@ -33,6 +33,7 @@ class HariSiklus {
     required this.hariKe,
     required this.perkiraan,
     required this.hariIni,
+    this.ovulasi = false,
     this.peluangHamil,
     this.penanda = const [],
   });
@@ -43,6 +44,7 @@ class HariSiklus {
     hariKe: json['day_of_cycle'] as int? ?? 0,
     perkiraan: json['predicted'] as bool? ?? false,
     hariIni: json['is_today'] as bool? ?? false,
+    ovulasi: json['is_ovulation'] as bool? ?? false,
     peluangHamil: PeluangHamil.dariKawat(json['pregnancy_chance']),
     penanda: (json['marks'] as List<dynamic>? ?? const []).cast<String>(),
   );
@@ -59,6 +61,9 @@ class HariSiklus {
   /// true = siklus hasil perkiraan, bukan yang sudah dicatat.
   final bool perkiraan;
   final bool hariIni;
+
+  /// Perkiraan hari ovulasi (hari L-14, di tengah masa subur).
+  final bool ovulasi;
 }
 
 class TipsDukungan {

@@ -161,6 +161,10 @@ Map<String, dynamic> _kuis({
 /// true = uang pribadi tiruan punya pemasukan; diubah tes lalu dikembalikan.
 bool _pribadiPemasukan = false;
 
+/// Bila diisi, `/notifications` menjawab per potong (limit/offset) dari
+/// sebanyak ini notifikasi, seperti backend sungguhan.
+int? _notifikasiPanjang;
+
 Map<String, dynamic> _pribadi({bool kosong = false}) => {
   'incomes': _pribadiPemasukan
       ? [
@@ -772,6 +776,40 @@ class _Adaptor implements HttpClientAdapter {
       );
     }
 
+    if (_notifikasiPanjang != null &&
+        options.method == 'GET' &&
+        options.uri.path.endsWith('/notifications')) {
+      final q = options.uri.queryParameters;
+      final limit = int.parse(q['limit'] ?? '100');
+      final offset = int.parse(q['offset'] ?? '0');
+      final semua = _notifikasiPanjang!;
+      final akhir = (offset + limit).clamp(0, semua);
+
+      permintaan.add('GET /api/notifications?offset=$offset&limit=$limit');
+
+      return ResponseBody.fromString(
+        jsonEncode({
+          'data': [
+            for (var i = offset; i < akhir; i++)
+              {
+                'id': i + 1,
+                'type': 'event_reminder',
+                'text': 'Notifikasi ke-${i + 1}',
+                'read': true,
+                'created_at': '2026-11-15T08:00:00+07:00',
+              },
+          ],
+          'unread': 0,
+          'has_more': akhir < semua,
+          'next_offset': akhir < semua ? akhir : null,
+        }),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
+
     if (options.uri.path.endsWith('/transactions/average')) {
       final periode = options.uri.queryParameters['period'] ?? 'month';
 
@@ -1199,9 +1237,9 @@ void main() {
     await pasang(tester, const SiklusScreen());
 
     // Tanggal 17 ada di ruas "subur" pada kalender tiruan.
-    await tester.ensureVisible(find.text('17'));
+    await tester.ensureVisible(find.byKey(const ValueKey('sel-17')));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('17'));
+    await tester.tap(find.byKey(const ValueKey('sel-17')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
@@ -1220,9 +1258,9 @@ void main() {
   ) async {
     await pasang(tester, const SiklusScreen());
 
-    await tester.ensureVisible(find.text('3').first);
+    await tester.ensureVisible(find.byKey(const ValueKey('sel-3')));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('3').first);
+    await tester.tap(find.byKey(const ValueKey('sel-3')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
 
@@ -1232,7 +1270,13 @@ void main() {
       find.text('Ubah catatan'),
       _hariIni.day >= 3 ? findsOneWidget : findsNothing,
     );
+    // Keterangan warna ada di balik tombol (i).
+    await tester.tap(find.bySemanticsLabel('Keterangan kalender'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('Ada catatan'), findsOneWidget);
+    expect(find.text('Hari ovulasi'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('siklus: pasangan bisa melihat catatan, tidak bisa mengubah', (
@@ -1240,16 +1284,22 @@ void main() {
   ) async {
     await pasang(tester, const SiklusScreen(), sebagaiPasangan: true);
 
-    await tester.ensureVisible(find.text('3').first);
+    await tester.ensureVisible(find.byKey(const ValueKey('sel-3')));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('3').first);
+    await tester.tap(find.byKey(const ValueKey('sel-3')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
 
     expect(find.textContaining('Hari siklus 3'), findsOneWidget);
     expect(find.text('Catat'), findsNothing);
     expect(find.text('Ubah catatan'), findsNothing);
+    // Keterangan warna ada di balik tombol (i).
+    await tester.tap(find.bySemanticsLabel('Keterangan kalender'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('Ada catatan'), findsOneWidget);
+    expect(find.text('Hari ovulasi'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
     // Tanggal 3 belum tiba pada tanggal 1-2: belum ada rincian catatannya.
     expect(
       find.text('Tercatat: aliran haid, gejala'),
@@ -1663,6 +1713,48 @@ void main() {
       adaptor.permintaan.skip(sebelum).where((p) => p.startsWith('POST')),
       isEmpty,
     );
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('notifikasi: dimuat 10 dulu, 10 lagi saat digulir', (
+    tester,
+  ) async {
+    _notifikasiPanjang = 23;
+    addTearDown(() => _notifikasiPanjang = null);
+
+    final adaptor = await pasang(tester, const NotifikasiScreen());
+    final cubit = tester
+        .element(find.byType(NotifikasiScreen))
+        .read<NotifikasiCubit>();
+
+    // Yang pertama hanya 10; layar yang belum penuh langsung menambah 10
+    // lagi, tetapi tidak sekaligus semuanya.
+    expect(cubit.state.nilai!.length, lessThan(23));
+    expect(cubit.adaLagi, isTrue);
+    expect(
+      adaptor.permintaan,
+      contains('GET /api/notifications?offset=0&limit=10'),
+    );
+
+    // Gulir sampai ujung: 10 berikutnya, lalu 3 sisanya.
+    for (var putaran = 0; putaran < 6 && cubit.adaLagi; putaran++) {
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -3000));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    expect(cubit.state.nilai, hasLength(23));
+    expect(cubit.adaLagi, isFalse);
+    expect(
+      adaptor.permintaan,
+      containsAll([
+        'GET /api/notifications?offset=10&limit=10',
+        'GET /api/notifications?offset=20&limit=10',
+      ]),
+    );
+    // Tidak ada baris ganda.
+    expect(cubit.state.nilai!.map((n) => n.id).toSet(), hasLength(23));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
     await tester.pump(const Duration(seconds: 2));
   });
 

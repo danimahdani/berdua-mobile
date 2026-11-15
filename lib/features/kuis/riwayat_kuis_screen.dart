@@ -7,6 +7,7 @@ import '../../core/rupiah.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/muat_lagi.dart';
 import 'kuis_cubit.dart';
 import 'kuis_screen.dart';
 import 'kuis_widgets.dart';
@@ -229,6 +230,11 @@ class _RiwayatKuisScreenState extends State<RiwayatKuisScreen> {
                   ),
                 ),
               ],
+              // 10 kuis per muat; 10 berikutnya saat digulir ke bawah.
+              MuatLagi(
+                ada: context.read<RiwayatKuisCubit>().adaLagi,
+                onMuatLagi: context.read<RiwayatKuisCubit>().muatLagi,
+              ),
               const SizedBox(height: 14),
               TombolUtama(
                 label: hariIni?.done ?? false

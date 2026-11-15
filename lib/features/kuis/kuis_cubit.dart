@@ -188,17 +188,42 @@ class RiwayatKuis {
   /// berdua.
   final double? average;
   final List<KuisSelesai> data;
+
+  /// Riwayat [baru] dengan baris lama di depannya (muat lagi).
+  RiwayatKuis sambung(RiwayatKuis baru) => RiwayatKuis(
+    count: baru.count,
+    average: baru.average,
+    data: [...data, ...baru.data],
+  );
 }
 
 /// Riwayat kuis yang sudah diselesaikan pengguna ini.
-class RiwayatKuisCubit extends MuatanCubit<RiwayatKuis> {
+class RiwayatKuisCubit extends MuatanCubit<RiwayatKuis>
+    with MuatBertahap<RiwayatKuis> {
   RiwayatKuisCubit(this._dio);
 
   final Dio _dio;
 
   @override
-  Future<RiwayatKuis> ambil() async =>
-      RiwayatKuis.fromJson(await _dio.send('GET', '/quiz/history'));
+  Future<RiwayatKuis> ambil() => _halaman();
+
+  @override
+  int termuat(RiwayatKuis nilai) => nilai.data.length;
+
+  @override
+  Future<RiwayatKuis> ambilLagi(RiwayatKuis lama, int offset) async =>
+      lama.sambung(await _halaman(offset));
+
+  Future<RiwayatKuis> _halaman([int? offset]) async {
+    final data = await _dio.send(
+      'GET',
+      '/quiz/history',
+      query: kueriHalaman(offset: offset),
+    );
+    catatHalaman(data);
+
+    return RiwayatKuis.fromJson(data);
+  }
 }
 
 /// Kuis hari ini. Backend memilihkan satu kuis per pasangan per tanggal.

@@ -46,6 +46,7 @@ class Notifikasi {
     'todo_due' => Icons.task_alt_outlined,
     'event_reminder' => Icons.event_outlined,
     'pill_reminder' => Icons.medication_outlined,
+    'pill_taken' => Icons.medication_rounded,
     'shopping_new' => Icons.shopping_basket_outlined,
     'saving_milestone' => Icons.savings_outlined,
     _ => Icons.notifications_none,
@@ -53,15 +54,30 @@ class Notifikasi {
 }
 
 /// Layar 07.
-class NotifikasiCubit extends MuatanCubit<List<Notifikasi>> {
+class NotifikasiCubit extends MuatanCubit<List<Notifikasi>>
+    with MuatBertahap<List<Notifikasi>> {
   NotifikasiCubit(this._dio, this._beranda);
 
   final Dio _dio;
   final BerandaCubit _beranda;
 
   @override
-  Future<List<Notifikasi>> ambil() async {
-    final data = await _dio.send('GET', '/notifications');
+  Future<List<Notifikasi>> ambil() => _halaman();
+
+  @override
+  int termuat(List<Notifikasi> nilai) => nilai.length;
+
+  @override
+  Future<List<Notifikasi>> ambilLagi(List<Notifikasi> lama, int offset) async =>
+      [...lama, ...await _halaman(offset)];
+
+  Future<List<Notifikasi>> _halaman([int? offset]) async {
+    final data = await _dio.send(
+      'GET',
+      '/notifications',
+      query: kueriHalaman(offset: offset),
+    );
+    catatHalaman(data);
 
     return (data['data'] as List<dynamic>)
         .map((e) => Notifikasi.fromJson(e as Map<String, dynamic>))

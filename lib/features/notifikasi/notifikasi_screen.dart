@@ -10,6 +10,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../../widgets/skeleton.dart';
 import '../bersama/bersama_cubit.dart';
+import '../../widgets/muat_lagi.dart';
 import 'notifikasi_cubit.dart';
 
 /// Warna ubin ikon per jenis notifikasi.
@@ -22,10 +23,9 @@ import 'notifikasi_cubit.dart';
     latar: BerduaColors.mintSoft,
     warna: BerduaColors.mintText,
   ),
-  'period_forecast' || 'pill_reminder' => (
-    latar: BerduaColors.rakaSoft,
-    warna: BerduaColors.rakaText,
-  ),
+  'period_forecast' ||
+  'pill_reminder' ||
+  'pill_taken' => (latar: BerduaColors.rakaSoft, warna: BerduaColors.rakaText),
   'todo_due' => (latar: BerduaColors.dindaSoft, warna: BerduaColors.dindaText),
   'event_reminder' => (
     latar: BerduaColors.kuningSoft,
@@ -53,7 +53,7 @@ class NotifikasiScreen extends StatelessWidget {
     switch (row.type) {
       case 'transaction_new' || 'transaction_changed' || 'settlement':
         context.go('/uang');
-      case 'period_forecast' || 'pill_reminder':
+      case 'period_forecast' || 'pill_reminder' || 'pill_taken':
         context.go('/siklus');
       case 'todo_due':
         keBersama(BagianBersama.todo);
@@ -196,6 +196,11 @@ class NotifikasiScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                 ],
+              // 10 notifikasi per muat; 10 berikutnya saat digulir.
+              MuatLagi(
+                ada: context.read<NotifikasiCubit>().adaLagi,
+                onMuatLagi: context.read<NotifikasiCubit>().muatLagi,
+              ),
             ],
           );
         },

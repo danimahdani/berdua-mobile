@@ -79,3 +79,60 @@ abstract class MuatanCubit<T> extends Cubit<Muatan<T>> {
     }
   }
 }
+
+/// Banyaknya baris per pemuatan pada daftar yang dimuat bertahap.
+const ukuranHalaman = 10;
+
+/// Daftar yang dimuat bertahap (gulir tanpa batas / *infinite scroll*):
+/// pemuatan pertama mengambil [ukuranHalaman] baris, lalu setiap kali
+/// pengguna menggulir mendekati ujung, [muatLagi] mengambil 10 berikutnya.
+///
+/// [ambil] memakai [kueriHalaman] dan mencatat sisa lewat [catatHalaman].
+/// Menyegarkan (mis. setelah menambah data) meminta sebanyak yang sudah
+/// tampil, supaya daftar tidak tiba-tiba memendek.
+mixin MuatBertahap<T> on MuatanCubit<T> {
+  bool _adaLagi = false;
+  bool _memuatLagi = false;
+
+  /// Masih ada baris di backend yang belum dimuat.
+  bool get adaLagi => _adaLagi;
+
+  /// Banyaknya baris yang sudah termuat di [nilai].
+  int termuat(T nilai);
+
+  /// Ambil potongan mulai [offset], lalu gabungkan ke [lama].
+  Future<T> ambilLagi(T lama, int offset);
+
+  /// Parameter `limit`/`offset` untuk permintaan daftar.
+  Map<String, dynamic> kueriHalaman({int? offset}) {
+    final lama = state.nilai;
+    final batas = offset != null || lama == null
+        ? ukuranHalaman
+        : termuat(lama).clamp(ukuranHalaman, 100);
+
+    return {'limit': batas, 'offset': offset ?? 0};
+  }
+
+  /// Baca `has_more` dari jawaban backend.
+  void catatHalaman(Map<String, dynamic> json) =>
+      _adaLagi = json['has_more'] as bool? ?? false;
+
+  Future<void> muatLagi() async {
+    final lama = state.nilai;
+
+    if (_memuatLagi || !_adaLagi || lama == null) return;
+
+    _memuatLagi = true;
+    final nomor = _nomor;
+
+    try {
+      final baru = await ambilLagi(lama, termuat(lama));
+
+      if (!isClosed && nomor == _nomor) emit(Muatan.data(baru));
+    } catch (_) {
+      // Dibiarkan: menggulir lagi akan mencoba ulang.
+    } finally {
+      _memuatLagi = false;
+    }
+  }
+}

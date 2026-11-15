@@ -25,7 +25,8 @@ class FilterUangCubit extends Cubit<FilterUang> {
 
 /// Daftar transaksi layar 08. Dimuat ulang tiap filter berganti; isi lama
 /// bertahan sampai jawaban baru datang.
-class UangCubit extends MuatanCubit<RingkasanUang> {
+class UangCubit extends MuatanCubit<RingkasanUang>
+    with MuatBertahap<RingkasanUang> {
   UangCubit(this._dio, this._filter, this._sesi) {
     _langganan = _filter.stream.listen((_) => segarkan());
   }
@@ -43,14 +44,28 @@ class UangCubit extends MuatanCubit<RingkasanUang> {
   }
 
   @override
-  Future<RingkasanUang> ambil() async {
+  Future<RingkasanUang> ambil() => _halaman();
+
+  @override
+  int termuat(RingkasanUang nilai) => nilai.transaksi.length;
+
+  @override
+  Future<RingkasanUang> ambilLagi(RingkasanUang lama, int offset) async =>
+      lama.sambung(await _halaman(offset));
+
+  /// Satu potongan daftar transaksi (10 per muat).
+  Future<RingkasanUang> _halaman([int? offset]) async {
     final filter = _filter.state;
 
     final data = await _dio.send(
       'GET',
       '/transactions',
-      query: filter.payerId == null ? null : {'payer_id': filter.payerId},
+      query: {
+        if (filter.payerId != null) 'payer_id': filter.payerId,
+        ...kueriHalaman(offset: offset),
+      },
     );
+    catatHalaman(data);
 
     return RingkasanUang.fromJson(data);
   }

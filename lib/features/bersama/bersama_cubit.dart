@@ -513,14 +513,31 @@ class CatatanJurnal {
   final DateTime date;
 }
 
-class JurnalCubit extends MuatanCubit<List<CatatanJurnal>> {
+class JurnalCubit extends MuatanCubit<List<CatatanJurnal>>
+    with MuatBertahap<List<CatatanJurnal>> {
   JurnalCubit(this._dio);
 
   final Dio _dio;
 
   @override
-  Future<List<CatatanJurnal>> ambil() async {
-    final data = await _dio.send('GET', '/journal');
+  Future<List<CatatanJurnal>> ambil() => _halaman();
+
+  @override
+  int termuat(List<CatatanJurnal> nilai) => nilai.length;
+
+  @override
+  Future<List<CatatanJurnal>> ambilLagi(
+    List<CatatanJurnal> lama,
+    int offset,
+  ) async => [...lama, ...await _halaman(offset)];
+
+  Future<List<CatatanJurnal>> _halaman([int? offset]) async {
+    final data = await _dio.send(
+      'GET',
+      '/journal',
+      query: kueriHalaman(offset: offset),
+    );
+    catatHalaman(data);
 
     return (data['data'] as List<dynamic>)
         .map((e) => CatatanJurnal.fromJson(e as Map<String, dynamic>))

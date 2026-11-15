@@ -123,12 +123,42 @@ class RingkasanPribadi {
   /// bulan, jadi mulai dari nol lagi setiap awal bulan.
   final int saldo;
 
-  /// Pengeluaran dan pemasukan dicampur, terbaru lebih dulu.
-  List<Object> get semuaCatatan {
-    DateTime tgl(Object o) =>
-        o is PemasukanPribadi ? o.tanggal : (o as PengeluaranPribadi).tanggal;
+  /// Banyaknya catatan (pengeluaran + pemasukan) yang sudah termuat.
+  int get jumlahTermuat => daftar.length + pemasukan.length;
 
-    return [...daftar, ...pemasukan]..sort((a, b) => tgl(b).compareTo(tgl(a)));
+  /// Ringkasan [baru] dengan catatan lama di depannya (muat lagi).
+  RingkasanPribadi sambung(RingkasanPribadi baru) => RingkasanPribadi(
+    bulan: baru.bulan,
+    daftar: [...daftar, ...baru.daftar],
+    total: baru.total,
+    totalBulanLalu: baru.totalBulanLalu,
+    perKategori: baru.perKategori,
+    rataRataBulanan: baru.rataRataBulanan,
+    jumlahBulanRataRata: baru.jumlahBulanRataRata,
+    pemasukan: [...pemasukan, ...baru.pemasukan],
+    totalPemasukan: baru.totalPemasukan,
+    saldo: baru.saldo,
+  );
+
+  /// Pengeluaran dan pemasukan dicampur, terbaru lebih dulu. Urutannya sama
+  /// dengan backend (tanggal, lalu pengeluaran dulu, lalu id terbaru),
+  /// supaya potongan berikutnya menyambung tanpa melompat.
+  List<Object> get semuaCatatan {
+    (DateTime, int, int) kunci(Object o) => switch (o) {
+      PemasukanPribadi p => (p.tanggal, 1, p.id),
+      PengeluaranPribadi p => (p.tanggal, 0, p.id),
+      _ => (DateTime(0), 0, 0),
+    };
+
+    return [...daftar, ...pemasukan]..sort((a, b) {
+      final (ta, ka, ia) = kunci(a);
+      final (tb, kb, ib) = kunci(b);
+
+      if (tb.compareTo(ta) case final c when c != 0) return c;
+      if (ka != kb) return ka - kb;
+
+      return ib - ia;
+    });
   }
 }
 
@@ -155,7 +185,8 @@ class BulanPribadiCubit extends Cubit<DateTime> {
 /// Begitu akun berganti (keluar lalu masuk dengan akun lain di perangkat
 /// yang sama), isi lama dibuang dan dimuat ulang dari awal, supaya catatan
 /// pribadi satu akun tidak pernah tampil untuk akun lain.
-class PribadiCubit extends MuatanCubit<RingkasanPribadi> {
+class PribadiCubit extends MuatanCubit<RingkasanPribadi>
+    with MuatBertahap<RingkasanPribadi> {
   PribadiCubit(this._dio, this._bulan, SesiCubit sesi)
     : _pemilik = sesi.state.user?.id {
     _langganan = [
@@ -178,16 +209,30 @@ class PribadiCubit extends MuatanCubit<RingkasanPribadi> {
   late final List<StreamSubscription<Object?>> _langganan;
 
   @override
-  Future<RingkasanPribadi> ambil() async {
-    final b = _bulan.state;
+  Future<RingkasanPribadi> ambil() => _halaman();
 
-    return RingkasanPribadi.fromJson(
-      await _dio.send(
-        'GET',
-        '/personal-expenses',
-        query: {'month': '${b.year}-${b.month.toString().padLeft(2, '0')}'},
-      ),
+  @override
+  int termuat(RingkasanPribadi nilai) => nilai.jumlahTermuat;
+
+  @override
+  Future<RingkasanPribadi> ambilLagi(RingkasanPribadi lama, int offset) async =>
+      lama.sambung(await _halaman(offset));
+
+  /// Satu potongan catatan bulan ini (10 per muat); angka ringkasannya
+  /// selalu dari seluruh bulan.
+  Future<RingkasanPribadi> _halaman([int? offset]) async {
+    final b = _bulan.state;
+    final data = await _dio.send(
+      'GET',
+      '/personal-expenses',
+      query: {
+        'month': '${b.year}-${b.month.toString().padLeft(2, '0')}',
+        ...kueriHalaman(offset: offset),
+      },
     );
+    catatHalaman(data);
+
+    return RingkasanPribadi.fromJson(data);
   }
 
   Map<String, dynamic> _isi({
