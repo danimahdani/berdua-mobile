@@ -19,7 +19,8 @@ import 'siklus_cubit.dart';
 /// berikon), yang langsung menyimpan saat "Simpan" diketuk — jadi tidak ada
 /// formulir panjang yang harus digulir.
 ///
-/// Hanya untuk pencatat siklus. Isinya tidak pernah ikut dibagikan.
+/// Pencatat bisa mengubah. Pasangan bisa melihat (hanya-baca) selama pencatat
+/// menyalakan "bagikan siklus"; yang tampil hanya kategori yang terisi.
 class CatatanHariScreen extends StatefulWidget {
   const CatatanHariScreen({super.key, required this.tanggal});
 
@@ -140,6 +141,8 @@ class _RingkasanState extends State<_Ringkasan> {
     final text = Theme.of(context).textTheme;
     final data = widget.data;
     final isi = data.isi;
+    final bisaUbah = data.bisaUbah;
+    final pemilik = data.namaPemilik.isEmpty ? 'Pasanganmu' : data.namaPemilik;
     final cubit = context.read<CatatanHariCubit>();
     final kini = DateTime.now();
     final judul =
@@ -176,7 +179,7 @@ class _RingkasanState extends State<_Ringkasan> {
       if (isi.suhu != null) '${_angka(isi.suhu)} °C',
     ].join(' · ');
 
-    final ubin = <_UbinKategori>[
+    final semuaUbin = <_UbinKategori>[
       _UbinKategori(
         emoji: '🩸',
         judul: 'Aliran haid',
@@ -329,6 +332,15 @@ class _RingkasanState extends State<_Ringkasan> {
       ),
     ];
 
+    // Pasangan: hanya kategori yang terisi, dan tidak bisa diketuk.
+    final ubin = bisaUbah
+        ? semuaUbin
+        : [
+            for (final u in semuaUbin)
+              if (u.isi != null) u.hanyaBaca(),
+          ];
+    final catatan = isi.catatan.trim();
+
     return LayarBerdua(
       judul: judul,
       stiker: JenisStiker.note,
@@ -370,14 +382,24 @@ class _RingkasanState extends State<_Ringkasan> {
         ),
         const SizedBox(height: Gap.md),
 
+        if (!bisaUbah) ...[
+          _CatatanHanyaBaca(pemilik: pemilik),
+          const SizedBox(height: Gap.md),
+        ],
+
         if (data.belumTiba)
           KartuBerdua(
             radius: Radii.cardBesar,
             child: Text(
-              'Hari ini belum tiba. Catatan bisa diisi mulai pada tanggalnya.',
+              bisaUbah
+                  ? 'Hari ini belum tiba. Catatan bisa diisi mulai pada '
+                        'tanggalnya.'
+                  : 'Tanggal ini belum tiba, jadi belum ada catatan.',
               style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.45),
             ),
           )
+        else if (!bisaUbah)
+          ..._isiHanyaBaca(context, data, ubin, catatan, pemilik)
         else ...[
           Row(
             children: [
@@ -447,13 +469,126 @@ class _RingkasanState extends State<_Ringkasan> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Text(
-              'Hanya kamu yang melihat catatan harian ini. Menyalakan '
-              '"bagikan siklus" tidak ikut membagikannya.',
+              'Selama "bagikan siklus" di Profil menyala, pasanganmu bisa '
+              'melihat catatan ini, tetapi tidak bisa mengubahnya.',
               style: text.labelSmall?.copyWith(fontSize: 13, height: 1.45),
             ),
           ),
         ],
       ],
+    );
+  }
+
+  /// Isi untuk pasangan: tanda haid, ubin yang terisi, dan catatan utuh.
+  List<Widget> _isiHanyaBaca(
+    BuildContext context,
+    CatatanHari data,
+    List<_UbinKategori> ubin,
+    String catatan,
+    String pemilik,
+  ) {
+    final text = Theme.of(context).textTheme;
+    final tanda = [
+      if (data.awalDiSini) 'Haid mulai di tanggal ini',
+      if (data.akhirDiSini) 'Haid selesai di tanggal ini',
+    ];
+
+    if (tanda.isEmpty && ubin.isEmpty && catatan.isEmpty) {
+      return [
+        KartuBerdua(
+          radius: Radii.cardBesar,
+          child: Text(
+            '$pemilik belum mencatat apa pun di tanggal ini.',
+            style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.45),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      for (final t in tanda) ...[
+        _UbinKategori(emoji: '🩸', judul: t, isi: 'Ditandai', onTap: null),
+        const SizedBox(height: Gap.sm),
+      ],
+      for (var i = 0; i < ubin.length; i += 2) ...[
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: ubin[i]),
+              const SizedBox(width: Gap.sm),
+              Expanded(
+                child: i + 1 < ubin.length
+                    ? ubin[i + 1]
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: Gap.sm),
+      ],
+      if (catatan.isNotEmpty)
+        KartuBerdua(
+          radius: Radii.button,
+          bayangan: false,
+          warna: BerduaColors.roseCard,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Catatan',
+                style: text.bodyMedium?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                catatan,
+                style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.45),
+              ),
+            ],
+          ),
+        ),
+    ];
+  }
+}
+
+/// Penanda di atas catatan yang dibuka pasangan.
+class _CatatanHanyaBaca extends StatelessWidget {
+  const _CatatanHanyaBaca({required this.pemilik});
+
+  final String pemilik;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: BerduaColors.rakaSoft,
+        borderRadius: BorderRadius.circular(Radii.input),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.visibility_outlined,
+            size: 18,
+            color: ChartColors.pasanganTeks,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Catatan $pemilik. Kamu bisa melihat, tetapi hanya $pemilik '
+              'yang bisa mengubahnya.',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 13,
+                height: 1.4,
+                color: ChartColors.pasanganTeks,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -508,13 +643,17 @@ class _UbinKategori extends StatelessWidget {
   final bool memuat;
   final VoidCallback? onTap;
 
+  /// Salinan yang tidak bisa diketuk, untuk tampilan pasangan.
+  _UbinKategori hanyaBaca() =>
+      _UbinKategori(emoji: emoji, judul: judul, isi: isi, onTap: null);
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final terisi = isi != null;
 
     return Semantics(
-      button: true,
+      button: onTap != null,
       label: '$judul, ${isi ?? kosong}',
       excludeSemantics: true,
       child: KartuBerdua(

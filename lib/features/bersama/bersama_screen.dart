@@ -759,8 +759,26 @@ class _TabunganSheetState extends State<_TabunganSheet> {
 
 // ------------------------------------------------------------ layar 20-21
 
-class _Jadwal extends StatelessWidget {
+/// Saringan daftar jadwal.
+enum _SaringJadwal {
+  semua('Semua'),
+  berdua('Berdua'),
+  pribadi('Pribadi');
+
+  const _SaringJadwal(this.label);
+
+  final String label;
+}
+
+class _Jadwal extends StatefulWidget {
   const _Jadwal();
+
+  @override
+  State<_Jadwal> createState() => _JadwalState();
+}
+
+class _JadwalState extends State<_Jadwal> {
+  var _saring = _SaringJadwal.semua;
 
   @override
   Widget build(BuildContext context) {
@@ -780,66 +798,139 @@ class _Jadwal extends StatelessWidget {
           onTap: () => bukaLembar<void>(context, (_) => const _JadwalSheet()),
         ),
         const SizedBox(height: Gap.md),
+        SegmenBerdua<_SaringJadwal>(
+          pilihan: _SaringJadwal.values,
+          terpilih: _saring,
+          label: (item) => item.label,
+          ukuranHuruf: 14,
+          onPilih: (item) => setState(() => _saring = item),
+        ),
+        const SizedBox(height: Gap.md),
       ],
-      bangun: (items) => [
-        for (final acara in items) ...[
-          KartuBerdua(
-            key: ValueKey(acara.id),
-            radius: Radii.button,
-            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-            child: Row(
-              children: [
-                BlokTanggal(
-                  bulan: TanggalId.monthBadge(acara.nextOccurrence),
-                  hari: acara.nextOccurrence.day,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        acara.title,
-                        style: text.bodyLarge?.copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          kapitalAwal(TanggalId.relative(acara.nextOccurrence)),
-                          'ingatkan ${acara.labelPengingat}',
-                          if (acara.yearly) 'tahunan',
-                        ].join(' · '),
-                        style: text.labelSmall,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: Gap.sm),
-                LabelKecil(
-                  acara.type,
-                  latar: BerduaColors.card2,
-                  warna: BerduaColors.lutealText,
-                  ukuran: 12,
-                ),
-                _TombolHapus(
-                  onTap: () => _jalankan(context, () => jadwal.hapus(acara.id)),
-                ),
-              ],
+      bangun: (semua) {
+        final items = switch (_saring) {
+          _SaringJadwal.semua => semua,
+          _SaringJadwal.berdua => semua.where((a) => !a.pribadi).toList(),
+          _SaringJadwal.pribadi => semua.where((a) => a.pribadi).toList(),
+        };
+
+        if (items.isEmpty) {
+          return [
+            KartuBerdua(
+              radius: Radii.button,
+              padding: const EdgeInsets.all(Gap.xl),
+              child: Text(
+                _saring == _SaringJadwal.pribadi
+                    ? 'Belum ada jadwal pribadi. Jadwal pribadi hanya '
+                          'terlihat olehmu.'
+                    : 'Belum ada jadwal berdua.',
+                textAlign: TextAlign.center,
+                style: text.bodyMedium?.copyWith(color: BerduaColors.label),
+              ),
             ),
-          ),
-          const SizedBox(height: Gap.md),
-        ],
-      ],
+          ];
+        }
+
+        return [
+          for (final acara in items) ...[
+            KartuBerdua(
+              key: ValueKey(acara.id),
+              radius: Radii.button,
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+              // Ketuk kartu untuk mengubah jadwal.
+              onTap: () =>
+                  bukaLembar<void>(context, (_) => _JadwalSheet(acara: acara)),
+              child: Row(
+                children: [
+                  BlokTanggal(
+                    bulan: TanggalId.monthBadge(acara.nextOccurrence),
+                    hari: acara.nextOccurrence.day,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          acara.title,
+                          style: text.bodyLarge?.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            kapitalAwal(
+                              TanggalId.relative(acara.nextOccurrence),
+                            ),
+                            ?acara.labelUlang,
+                            'ingatkan ${acara.labelPengingat}',
+                          ].join(' · '),
+                          style: text.labelSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        // Di bawah judul (bukan di kanan) supaya judul tetap
+                        // lega di layar sempit.
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            LabelKecil(
+                              acara.type,
+                              latar: BerduaColors.card2,
+                              warna: BerduaColors.lutealText,
+                              ukuran: 12,
+                            ),
+                            if (acara.pribadi)
+                              const LabelKecil(
+                                '🔒 Pribadi',
+                                latar: BerduaColors.rakaSoft,
+                                warna: BerduaColors.rakaText,
+                                ukuran: 12,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: Gap.sm),
+                  _TombolHapus(
+                    onTap: () =>
+                        _jalankan(context, () => jadwal.hapus(acara.id)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Gap.md),
+          ],
+        ];
+      },
     );
   }
 }
 
-/// Layar 21: Tambah jadwal.
+/// Pilihan "Ulangi" di lembar jadwal.
+enum _Ulang {
+  tidak('Tidak', null),
+  harian('Setiap hari', 'day'),
+  mingguan('Setiap minggu', 'week'),
+  bulanan('Setiap bulan', 'month'),
+  tahunan('Setiap tahun', 'year'),
+  kustom('Kustom', null);
+
+  const _Ulang(this.label, this.satuan);
+
+  final String label;
+  final String? satuan;
+}
+
+/// Layar 21: Tambah jadwal, atau ubah kalau [acara] diisi.
 class _JadwalSheet extends StatefulWidget {
-  const _JadwalSheet();
+  const _JadwalSheet({this.acara});
+
+  final Acara? acara;
 
   @override
   State<_JadwalSheet> createState() => _JadwalSheetState();
@@ -850,9 +941,54 @@ class _JadwalSheetState extends State<_JadwalSheet> {
   DateTime _tanggal = DateTime.now().add(const Duration(days: 1));
   String _jenis = BerduaEnums.eventTypes.first;
   int _ingatkan = 1;
-  bool _tahunan = false;
+  bool _pribadi = false;
+  _Ulang _ulang = _Ulang.tidak;
+
+  /// Kustom: "setiap [_setiap] [_satuanKustom]", mis. setiap 3 hari.
+  int _setiap = 3;
+  String _satuanKustom = 'day';
+
   bool _menyimpan = false;
   String? _galat;
+
+  bool get _ubah => widget.acara != null;
+
+  /// Jadwal berdua tidak bisa dijadikan pribadi (menyembunyikannya dari
+  /// pasangan); jadwal pribadi boleh dibagikan jadi berdua.
+  bool get _bolehPilihPribadi => !_ubah || widget.acara!.pribadi;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final acara = widget.acara;
+
+    if (acara == null) return;
+
+    _judul.text = acara.title;
+    _tanggal = acara.tanggal ?? acara.nextOccurrence;
+    if (BerduaEnums.eventTypes.contains(acara.type)) _jenis = acara.type;
+    if (_pilihanIngatkan.containsKey(acara.remindBefore)) {
+      _ingatkan = acara.remindBefore;
+    }
+    _pribadi = acara.pribadi;
+
+    final satuan = acara.ulangSatuan;
+
+    if (satuan == null) {
+      _ulang = _Ulang.tidak;
+    } else if (acara.ulangSetiap <= 1) {
+      _ulang = _Ulang.values.firstWhere(
+        (u) => u.satuan == satuan,
+        orElse: () => _Ulang.kustom,
+      );
+      _satuanKustom = satuan;
+    } else {
+      _ulang = _Ulang.kustom;
+      _setiap = acara.ulangSetiap;
+      _satuanKustom = satuan;
+    }
+  }
 
   static const _pilihanIngatkan = {
     0: 'Hari H',
@@ -861,11 +997,18 @@ class _JadwalSheetState extends State<_JadwalSheet> {
     7: '1 minggu',
   };
 
+  static const _batasSetiap = 365;
+
   @override
   void dispose() {
     _judul.dispose();
     super.dispose();
   }
+
+  String? get _satuan =>
+      _ulang == _Ulang.kustom ? _satuanKustom : _ulang.satuan;
+
+  int get _setiapTerkirim => _ulang == _Ulang.kustom ? _setiap : 1;
 
   Future<void> _simpan() async {
     if (_judul.text.trim().isEmpty) {
@@ -877,6 +1020,7 @@ class _JadwalSheetState extends State<_JadwalSheet> {
     // Navigator dipegang sebelum await supaya BuildContext tidak disentuh
     // setelah sheet selesai menyimpan.
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
 
     setState(() {
       _menyimpan = true;
@@ -884,15 +1028,26 @@ class _JadwalSheetState extends State<_JadwalSheet> {
     });
 
     try {
-      await context.read<JadwalCubit>().tambah(
+      await context.read<JadwalCubit>().simpan(
+        id: widget.acara?.id,
         judul: _judul.text.trim(),
         tanggal: _tanggal,
         jenis: _jenis,
         ingatkan: _ingatkan,
-        tahunan: _tahunan,
+        ulangSatuan: _satuan,
+        ulangSetiap: _setiapTerkirim,
+        pribadi: _pribadi,
       );
 
       navigator.pop();
+      tampilkanToastVia(
+        messenger,
+        _ubah
+            ? 'Perubahan jadwal disimpan'
+            : _pribadi
+            ? 'Jadwal pribadi disimpan'
+            : 'Jadwal berdua disimpan',
+      );
     } on ApiException catch (error) {
       if (mounted) setState(() => _galat = error.message);
     } finally {
@@ -903,19 +1058,42 @@ class _JadwalSheetState extends State<_JadwalSheet> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final keterangan = text.bodySmall?.copyWith(color: BerduaColors.label);
 
     return IsiLembar(
-      judul: 'Jadwal baru',
+      judul: _ubah ? 'Ubah jadwal' : 'Jadwal baru',
       children: [
         TextField(
           controller: _judul,
-          autofocus: true,
+          autofocus: !_ubah,
           textCapitalization: TextCapitalization.sentences,
           style: text.bodyLarge?.copyWith(fontSize: 17),
           inputFormatters: [LengthLimitingTextInputFormatter(80)],
           decoration: const InputDecoration(
             hintText: 'Judul, mis. Makan malam anniversary',
           ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const LabelIsian('Untuk'),
+            SegmenBerdua<bool>(
+              gaya: GayaSegmen.sheet,
+              pilihan: _bolehPilihPribadi ? const [false, true] : const [false],
+              terpilih: _pribadi,
+              label: (pribadi) => pribadi ? 'Pribadi' : 'Berdua',
+              onPilih: (pribadi) => setState(() => _pribadi = pribadi),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              !_bolehPilihPribadi
+                  ? 'Jadwal berdua tidak bisa dijadikan pribadi.'
+                  : _pribadi
+                  ? 'Hanya kamu yang melihat dan diingatkan.'
+                  : 'Kalian berdua melihat dan diingatkan.',
+              style: keterangan,
+            ),
+          ],
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -958,6 +1136,34 @@ class _JadwalSheetState extends State<_JadwalSheet> {
           ],
         ),
         Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const LabelIsian('Ulangi'),
+            Wrap(
+              spacing: Gap.sm,
+              runSpacing: Gap.sm,
+              children: [
+                for (final ulang in _Ulang.values)
+                  ChipBerdua(
+                    label: ulang.label,
+                    aktif: _ulang == ulang,
+                    onTap: () => setState(() => _ulang = ulang),
+                  ),
+              ],
+            ),
+            if (_ulang == _Ulang.kustom) ...[
+              const SizedBox(height: Gap.md),
+              _UlangKustom(
+                setiap: _setiap,
+                satuan: _satuanKustom,
+                batas: _batasSetiap,
+                onSetiap: (n) => setState(() => _setiap = n),
+                onSatuan: (s) => setState(() => _satuanKustom = s),
+              ),
+            ],
+          ],
+        ),
+        Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const LabelIsian('Ingatkan'),
@@ -969,20 +1175,107 @@ class _JadwalSheetState extends State<_JadwalSheet> {
               label: (hari) => _pilihanIngatkan[hari]!,
               onPilih: (hari) => setState(() => _ingatkan = hari),
             ),
+            const SizedBox(height: 6),
+            Text(
+              _pribadi
+                  ? 'Notifikasi pengingat hanya dikirim ke kamu.'
+                  : 'Notifikasi pengingat dikirim ke kalian berdua.',
+              style: keterangan,
+            ),
           ],
-        ),
-        BarisSakelar(
-          label: 'Ulangi setiap tahun',
-          nyala: _tahunan,
-          onUbah: (nilai) => setState(() => _tahunan = nilai),
         ),
         ?(_galat == null ? null : TeksGalat(_galat!)),
         TombolUtama(
-          label: 'Simpan jadwal',
+          label: _ubah ? 'Simpan perubahan' : 'Simpan jadwal',
           memuat: _menyimpan,
           onPressed: _simpan,
         ),
       ],
+    );
+  }
+}
+
+/// "Setiap [-] 3 [+]" lalu pilihan satuan hari/minggu/bulan/tahun.
+class _UlangKustom extends StatelessWidget {
+  const _UlangKustom({
+    required this.setiap,
+    required this.satuan,
+    required this.batas,
+    required this.onSetiap,
+    required this.onSatuan,
+  });
+
+  final int setiap;
+  final String satuan;
+  final int batas;
+  final ValueChanged<int> onSetiap;
+  final ValueChanged<String> onSatuan;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    Widget tombol(IconData ikon, String label, int? nilai) => IconButton(
+      tooltip: label,
+      onPressed: nilai == null ? null : () => onSetiap(nilai),
+      icon: Icon(ikon),
+      color: BerduaColors.ink,
+      style: IconButton.styleFrom(backgroundColor: BerduaColors.card2),
+    );
+
+    return KartuBerdua(
+      radius: Radii.input,
+      bayangan: false,
+      padding: const EdgeInsets.all(Gap.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('Setiap', style: text.bodyLarge?.copyWith(fontSize: 16)),
+              const Spacer(),
+              tombol(
+                Icons.remove_rounded,
+                'Kurangi',
+                setiap > 1 ? setiap - 1 : null,
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '$setiap',
+                  key: const ValueKey('ulang-setiap'),
+                  textAlign: TextAlign.center,
+                  style: text.titleMedium?.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              tombol(
+                Icons.add_rounded,
+                'Tambah',
+                setiap < batas ? setiap + 1 : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: Gap.sm),
+          SegmenBerdua<String>(
+            gaya: GayaSegmen.sheet,
+            ukuranHuruf: 14,
+            pilihan: Acara.namaSatuan.keys.toList(),
+            terpilih: satuan,
+            label: (s) => Acara.namaSatuan[s]!,
+            onPilih: onSatuan,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            setiap == 1
+                ? 'Berulang setiap ${Acara.namaSatuan[satuan]}.'
+                : 'Berulang setiap $setiap ${Acara.namaSatuan[satuan]} sekali.',
+            style: text.bodySmall?.copyWith(color: BerduaColors.label),
+          ),
+        ],
+      ),
     );
   }
 }

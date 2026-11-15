@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -15,6 +16,7 @@ import 'package:berdua/features/laporan/laporan_screen.dart';
 import 'package:berdua/features/laporan/rata_rata_screen.dart';
 import 'package:berdua/features/money/tambah_pengeluaran_sheet.dart';
 import 'package:berdua/features/money/uang_screen.dart';
+import 'package:berdua/features/notifikasi/notifikasi_cubit.dart';
 import 'package:berdua/features/notifikasi/notifikasi_screen.dart';
 import 'package:berdua/features/pribadi/pribadi_screen.dart';
 import 'package:berdua/features/profil/profil_screen.dart';
@@ -156,7 +158,22 @@ Map<String, dynamic> _kuis({
 }
 
 /// Pengeluaran pribadi bulan ini milik akun yang masuk.
+/// true = uang pribadi tiruan punya pemasukan; diubah tes lalu dikembalikan.
+bool _pribadiPemasukan = false;
+
 Map<String, dynamic> _pribadi({bool kosong = false}) => {
+  'incomes': _pribadiPemasukan
+      ? [
+          {
+            'id': 21,
+            'title': 'Gaji November',
+            'amount': 3000000,
+            'date': _tgl(DateTime(_hariIni.year, _hariIni.month)),
+          },
+        ]
+      : <Object>[],
+  'income_total': _pribadiPemasukan ? 3000000 : 0,
+  'balance': (_pribadiPemasukan ? 3000000 : 0) - (kosong ? 0 : 213000),
   'month': _tgl(_hariIni).substring(0, 7),
   'data': kosong
       ? <Object>[]
@@ -241,15 +258,49 @@ Map<String, dynamic> _rataRata(String periode) {
   };
 }
 
+/// `period_status` tiruan untuk `/cycle`; diubah tes lalu dikembalikan.
+Map<String, bool> _statusHaid = const {'ongoing': false, 'ended_today': false};
+
+/// Status pil KB tiruan untuk `/pill`; diubah tes lalu dikembalikan.
+bool _pilSudahMinum = false;
+
+Map<String, dynamic> _pil({required bool pasangan}) => {
+  'visible': true,
+  'configured': true,
+  'can_edit': !pasangan,
+  'owner_name': 'Dinda',
+  'active': true,
+  'time': '21:00',
+  'pattern': '21_7',
+  'start_date': '2026-11-01',
+  'partner_can_nudge': true,
+  'today': {
+    'date': '2026-11-12',
+    'is_pill_day': true,
+    'day_in_pack': 12,
+    'taken': _pilSudahMinum,
+    'taken_at': _pilSudahMinum ? '08:15' : null,
+  },
+  'can_nudge': pasangan && !_pilSudahMinum,
+  'nudge_available_at': null,
+  'message': 'Pengingat terkirim ke Dinda.',
+};
+
 Map<String, dynamic> _jawaban(
   String path, {
   bool siklusPasangan = false,
   bool kuisSelesai = false,
   bool pasanganMenjawab = true,
 }) {
+  if (path.endsWith('/pill') || path.contains('/pill/')) {
+    return _pil(pasangan: siklusPasangan);
+  }
+
   // Catatan harian siklus, termasuk tanda awal/akhir haid di tanggal itu.
   if (path.contains('/cycle/days/')) {
     return {
+      'can_edit': !siklusPasangan,
+      'owner_name': 'Dinda',
       'date': _tgl(_hariIni),
       'is_future': false,
       'day_of_cycle': 22,
@@ -310,6 +361,16 @@ Map<String, dynamic> _jawaban(
             'same': sama,
           },
       ],
+    };
+  }
+
+  // Profil dimuat ulang sesudah transaksi disimpan (saldo di beranda).
+  if (path.endsWith('/me')) {
+    return {
+      'user': _dinda,
+      'partner': _raka,
+      'couple': _pasangan,
+      'balance': 51000,
     };
   }
 
@@ -446,6 +507,7 @@ Map<String, dynamic> _jawaban(
         'end': _tgl(_hariIni.add(const Duration(days: 22))),
       },
       'symptoms_today': ['lelah', 'kram'],
+      'period_status': _statusHaid,
       'month': _tgl(awal).substring(0, 7),
       'calendar': [
         for (var i = 0; i < akhir; i++)
@@ -461,8 +523,8 @@ Map<String, dynamic> _jawaban(
             ][i ~/ 8],
             'predicted': i > 20,
             'is_today': i + 1 == _hariIni.day,
-            // Penanda catatan harian hanya dikirim untuk pencatat.
-            if (!siklusPasangan) 'marks': i == 2 ? ['flow', 'symptoms'] : [],
+            // Penanda catatan harian ikut terkirim untuk pasangan yang dibagi.
+            'marks': i == 2 ? ['flow', 'symptoms'] : [],
           },
       ],
       'tips': siklusPasangan
@@ -543,6 +605,21 @@ Map<String, dynamic> _jawaban(
           'days_until': 12,
           'remind_before': 3,
           'yearly': true,
+          'repeat_unit': 'year',
+          'repeat_interval': 1,
+          'personal': false,
+        },
+        {
+          'id': 2,
+          'title': 'Siram tanaman',
+          'type': 'Lainnya',
+          'next_occurrence': _tgl(_hariIni.add(const Duration(days: 2))),
+          'days_until': 2,
+          'remind_before': 0,
+          'yearly': false,
+          'repeat_unit': 'day',
+          'repeat_interval': 3,
+          'personal': true,
         },
       ],
     };
@@ -624,6 +701,15 @@ class _Adaptor implements HttpClientAdapter {
   /// Semua permintaan, mis. `PUT /api/cycle/days/2026-11-12/period-end`.
   final permintaan = <String>[];
 
+  /// Isi permintaan POST terakhir ke `/transactions`.
+  Map<String, dynamic>? transaksiTerkirim;
+
+  /// Isi permintaan POST terakhir ke `/events`.
+  Map<String, dynamic>? jadwalTerkirim;
+
+  /// Isi permintaan PUT terakhir ke `/pill`.
+  Map<String, dynamic>? pilTerkirim;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -631,6 +717,21 @@ class _Adaptor implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     permintaan.add('${options.method} ${options.uri.path}');
+
+    if (options.method == 'POST' &&
+        options.uri.path.endsWith('/transactions')) {
+      transaksiTerkirim = Map<String, dynamic>.from(options.data as Map);
+    }
+
+    if (options.method == 'PUT' && options.uri.path.endsWith('/pill')) {
+      pilTerkirim = Map<String, dynamic>.from(options.data as Map);
+    }
+
+    if ((options.method == 'POST' && options.uri.path.endsWith('/events')) ||
+        (options.method == 'PATCH' &&
+            RegExp(r'/events/\d+$').hasMatch(options.uri.path))) {
+      jadwalTerkirim = Map<String, dynamic>.from(options.data as Map);
+    }
 
     if (options.uri.path.endsWith('/personal-expenses/report')) {
       return ResponseBody.fromString(
@@ -654,7 +755,8 @@ class _Adaptor implements HttpClientAdapter {
       );
     }
 
-    if (options.uri.path.contains('/personal-expenses')) {
+    if (options.uri.path.contains('/personal-expenses') ||
+        options.uri.path.contains('/personal-incomes')) {
       if (options.method != 'GET') {
         pribadiTerkirim.add(
           '${options.method} ${options.uri.path} ${jsonEncode(options.data)}',
@@ -1000,6 +1102,79 @@ void main() {
     expect(find.textContaining('Obrolkan'), findsNothing);
   });
 
+  testWidgets('catatan harian: pasangan melihat hanya-baca', (tester) async {
+    final adaptor = await pasang(
+      tester,
+      CatatanHariScreen(tanggal: _hariIni),
+      sebagaiPasangan: true,
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.textContaining('Catatan Dinda.'), findsOneWidget);
+    // Hanya kategori yang terisi yang tampil.
+    expect(find.text('Aliran haid'), findsOneWidget);
+    expect(find.text('Gejala'), findsOneWidget);
+    expect(find.text('Suasana hati'), findsOneWidget);
+    expect(find.text('Energi'), findsNothing);
+    expect(find.text('Pil KB'), findsNothing);
+    // Tidak ada tombol untuk mengubah.
+    expect(find.text('Awal haid'), findsNothing);
+    expect(find.text('Akhir haid'), findsNothing);
+
+    await tester.tap(find.text('Aliran haid'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.permintaan.where((r) => !r.startsWith('GET ')), isEmpty);
+    expect(find.textContaining('Catatan Dinda.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('siklus: tombol haid mengikuti haid yang sedang berjalan', (
+    tester,
+  ) async {
+    addTearDown(
+      () => _statusHaid = const {'ongoing': false, 'ended_today': false},
+    );
+
+    Future<void> gulirKe(Finder f) async {
+      await tester.scrollUntilVisible(
+        f,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    // Belum ada haid berjalan: tombol "mulai".
+    await pasang(tester, const SiklusScreen());
+    await gulirKe(find.text('HAID MULAI HARI INI'));
+    expect(find.text('HAID SELESAI HARI INI'), findsNothing);
+
+    // Haid sedang berjalan: "mulai" disembunyikan, diganti "selesai".
+    _statusHaid = const {'ongoing': true, 'ended_today': false};
+    final adaptor = await pasang(tester, const SiklusScreen());
+    await gulirKe(find.text('HAID SELESAI HARI INI'));
+    expect(find.text('HAID MULAI HARI INI'), findsNothing);
+
+    await tester.tap(find.text('HAID SELESAI HARI INI'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      adaptor.permintaan,
+      contains('PUT /api/cycle/days/${_tgl(DateTime.now())}/period-end'),
+    );
+    await tester.pump(const Duration(seconds: 3));
+
+    // Baru ditandai selesai hari ini: keterangan dan "Batalkan".
+    _statusHaid = const {'ongoing': false, 'ended_today': true};
+    await pasang(tester, const SiklusScreen());
+    await gulirKe(find.text('Haid ditandai selesai hari ini.'));
+    expect(find.text('Batalkan'), findsOneWidget);
+    expect(find.text('HAID MULAI HARI INI'), findsNothing);
+    expect(find.text('HAID SELESAI HARI INI'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
   testWidgets('siklus: peluang kehamilan tampil untuk pencatat dan pasangan', (
     tester,
   ) async {
@@ -1060,7 +1235,9 @@ void main() {
     expect(find.text('Ada catatan'), findsOneWidget);
   });
 
-  testWidgets('siklus: pasangan tidak ditawari catatan harian', (tester) async {
+  testWidgets('siklus: pasangan bisa melihat catatan, tidak bisa mengubah', (
+    tester,
+  ) async {
     await pasang(tester, const SiklusScreen(), sebagaiPasangan: true);
 
     await tester.ensureVisible(find.text('3').first);
@@ -1072,8 +1249,16 @@ void main() {
     expect(find.textContaining('Hari siklus 3'), findsOneWidget);
     expect(find.text('Catat'), findsNothing);
     expect(find.text('Ubah catatan'), findsNothing);
-    expect(find.textContaining('Tercatat'), findsNothing);
-    expect(find.text('Ada catatan'), findsNothing);
+    expect(find.text('Ada catatan'), findsOneWidget);
+    // Tanggal 3 belum tiba pada tanggal 1-2: belum ada rincian catatannya.
+    expect(
+      find.text('Tercatat: aliran haid, gejala'),
+      _hariIni.day >= 3 ? findsOneWidget : findsNothing,
+    );
+    expect(
+      find.text('Lihat catatan'),
+      _hariIni.day >= 3 ? findsOneWidget : findsNothing,
+    );
   });
 
   testWidgets('siklus: panah kalender meminta bulan lain', (tester) async {
@@ -1266,10 +1451,7 @@ void main() {
     final adaptor = await pasang(tester, LaporanScreen.untukPribadi());
     await tester.pump(const Duration(seconds: 1));
 
-    expect(
-      adaptor.permintaan,
-      contains('GET /api/personal-expenses/report'),
-    );
+    expect(adaptor.permintaan, contains('GET /api/personal-expenses/report'));
     expect(
       adaptor.permintaan.where((p) => p.endsWith('/transactions/report')),
       isEmpty,
@@ -1290,9 +1472,7 @@ void main() {
     final segmen = find.byType(PemilihModeUang);
     double kiriPil() => tester
         .getTopLeft(
-          find
-              .descendant(of: segmen, matching: find.byType(Positioned))
-              .first,
+          find.descendant(of: segmen, matching: find.byType(Positioned)).first,
         )
         .dx;
     final awal = kiriPil();
@@ -1356,6 +1536,415 @@ void main() {
 
     expect(find.text('Uang bersama'), findsOneWidget);
     expect(find.text('Uang pribadi'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('jadwal: saringan berdua/pribadi dan label pengulangan', (
+    tester,
+  ) async {
+    await pasang(tester, const BersamaScreen());
+    tester
+        .element(find.byType(BersamaScreen))
+        .read<BagianBersamaCubit>()
+        .pilih(BagianBersama.jadwal);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Siram tanaman'), findsOneWidget);
+    expect(find.textContaining('setiap 3 hari'), findsOneWidget);
+    expect(find.textContaining('setiap tahun'), findsOneWidget);
+    expect(find.text('Pribadi'), findsWidgets);
+
+    await tester.tap(find.text('Berdua'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Siram tanaman'), findsNothing);
+    expect(
+      find.text('Makan malam anniversary di tempat biasa'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Pribadi').first);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Siram tanaman'), findsOneWidget);
+    expect(find.text('Makan malam anniversary di tempat biasa'), findsNothing);
+  });
+
+  testWidgets('jadwal: tambah jadwal pribadi berulang kustom', (tester) async {
+    final adaptor = await pasang(tester, const BersamaScreen());
+    tester
+        .element(find.byType(BersamaScreen))
+        .read<BagianBersamaCubit>()
+        .pilih(BagianBersama.jadwal);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.tap(find.text('Tambah jadwal atau pengingat'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    final lembar = find.byType(Scrollable).last;
+
+    Future<void> ketuk(Finder f) async {
+      await tester.scrollUntilVisible(f, 150, scrollable: lembar);
+      // Ke tengah supaya tidak tertutup kepala lembar.
+      unawaited(
+        Scrollable.ensureVisible(tester.element(f.first), alignment: .5),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(f.first);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await tester.enterText(find.byType(TextField).last, 'Minum vitamin');
+
+    final pribadi = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.text('Pribadi'),
+    );
+    await ketuk(pribadi);
+    expect(
+      find.text('Hanya kamu yang melihat dan diingatkan.'),
+      findsOneWidget,
+    );
+
+    await ketuk(find.text('Kustom'));
+    // Bawaan setiap 3 hari; jadikan setiap 2 minggu.
+    expect(find.text('Berulang setiap 3 hari sekali.'), findsOneWidget);
+    await ketuk(find.byTooltip('Kurangi'));
+    await ketuk(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('minggu'),
+      ),
+    );
+    expect(find.text('Berulang setiap 2 minggu sekali.'), findsOneWidget);
+
+    await ketuk(find.text('SIMPAN JADWAL'));
+    await tester.pump(const Duration(seconds: 1));
+
+    final terkirim = adaptor.jadwalTerkirim;
+    expect(terkirim?['title'], 'Minum vitamin');
+    expect(terkirim?['personal'], isTrue);
+    expect(terkirim?['repeat_unit'], 'week');
+    expect(terkirim?['repeat_interval'], 2);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('notifikasi: mengetuk satu hanya menandai yang itu', (
+    tester,
+  ) async {
+    final adaptor = await pasang(tester, const NotifikasiScreen());
+    final cubit = tester
+        .element(find.byType(NotifikasiScreen))
+        .read<NotifikasiCubit>();
+
+    List<bool> dibaca() => [for (final r in cubit.state.nilai!) r.read];
+
+    // id genap belum dibaca: 0, 2, 4, 6.
+    expect(dibaca(), [false, true, false, true, false, true, false]);
+
+    unawaited(cubit.tandaiDibaca(2));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(dibaca(), [false, true, true, true, false, true, false]);
+    expect(adaptor.permintaan, contains('POST /api/notifications/2/read'));
+    expect(adaptor.permintaan.where((p) => p.contains('read-all')), isEmpty);
+
+    // Yang sudah dibaca tidak dikirim lagi.
+    final sebelum = adaptor.permintaan.length;
+    unawaited(cubit.tandaiDibaca(1));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      adaptor.permintaan.skip(sebelum).where((p) => p.startsWith('POST')),
+      isEmpty,
+    );
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('jadwal: ketuk kartu untuk mengubah jadwal', (tester) async {
+    final adaptor = await pasang(tester, const BersamaScreen());
+    tester
+        .element(find.byType(BersamaScreen))
+        .read<BagianBersamaCubit>()
+        .pilih(BagianBersama.jadwal);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.tap(find.text('Siram tanaman'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    // Terisi dari jadwal yang ada: pribadi, kustom setiap 3 hari.
+    expect(find.text('Ubah jadwal'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Siram tanaman'), findsOneWidget);
+    expect(
+      find.text('Hanya kamu yang melihat dan diingatkan.'),
+      findsOneWidget,
+    );
+    expect(find.text('Berulang setiap 3 hari sekali.'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Siram tanaman'),
+      'Siram tanaman depan',
+    );
+    await tester.pump();
+
+    final lembar = find.byType(Scrollable).last;
+    final simpan = find.text('SIMPAN PERUBAHAN');
+    await tester.scrollUntilVisible(simpan, 150, scrollable: lembar);
+    unawaited(Scrollable.ensureVisible(tester.element(simpan), alignment: .5));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(simpan);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.permintaan, contains('PATCH /api/events/2'));
+    final terkirim = adaptor.jadwalTerkirim;
+    expect(terkirim?['title'], 'Siram tanaman depan');
+    expect(terkirim?['personal'], isTrue);
+    expect(terkirim?['repeat_unit'], 'day');
+    expect(terkirim?['repeat_interval'], 3);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('jadwal: jadwal berdua tidak bisa dijadikan pribadi', (
+    tester,
+  ) async {
+    await pasang(tester, const BersamaScreen());
+    tester
+        .element(find.byType(BersamaScreen))
+        .read<BagianBersamaCubit>()
+        .pilih(BagianBersama.jadwal);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(seconds: 2));
+
+    await tester.tap(find.text('Makan malam anniversary di tempat biasa'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Ubah jadwal'), findsOneWidget);
+    expect(
+      find.text('Jadwal berdua tidak bisa dijadikan pribadi.'),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Pribadi'),
+      ),
+      findsNothing,
+    );
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('pil KB: pencatat menandai sudah minum', (tester) async {
+    addTearDown(() => _pilSudahMinum = false);
+
+    final adaptor = await pasang(tester, const SiklusScreen());
+    final tombol = find.text('SUDAH MINUM');
+
+    await tester.scrollUntilVisible(
+      tombol,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Pil KB'), findsOneWidget);
+    expect(
+      find.text('Pukul 21:00 · 21 hari + 7 jeda · hari ke-12 dari 28'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('mengingatkanmu kalau lupa'), findsOneWidget);
+
+    _pilSudahMinum = true;
+    await tester.tap(tombol);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.permintaan, contains('POST /api/pill/taken'));
+    expect(find.text('Sudah diminum pukul 08:15'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('pil KB: pasangan bisa mengingatkan', (tester) async {
+    final adaptor = await pasang(
+      tester,
+      const SiklusScreen(),
+      sebagaiPasangan: true,
+    );
+    final tombol = find.text('INGATKAN DINDA');
+
+    await tester.scrollUntilVisible(
+      tombol,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Pil KB Dinda'), findsOneWidget);
+    expect(find.text('Belum ditandai diminum hari ini.'), findsOneWidget);
+    expect(find.text('SUDAH MINUM'), findsNothing);
+
+    await tester.tap(tombol);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.permintaan, contains('POST /api/pill/nudge'));
+    expect(find.text('Pengingat terkirim ke Dinda.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('pil KB: atur jam dan pola', (tester) async {
+    final adaptor = await pasang(tester, const SiklusScreen());
+    final atur = find.byTooltip('Atur pengingat pil');
+
+    await tester.scrollUntilVisible(
+      atur,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(atur);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Pengingat pil KB'), findsOneWidget);
+    expect(find.text('Pukul 21:00'), findsOneWidget);
+
+    final lembar = find.byType(Scrollable).last;
+    Future<void> ketuk(Finder f) async {
+      await tester.scrollUntilVisible(f, 150, scrollable: lembar);
+      unawaited(
+        Scrollable.ensureVisible(tester.element(f.first), alignment: .5),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(f.first);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await ketuk(find.text('Setiap hari'));
+    await ketuk(find.text('SIMPAN PENGINGAT'));
+    await tester.pump(const Duration(seconds: 1));
+
+    final terkirim = adaptor.pilTerkirim;
+    expect(terkirim?['time'], '21:00');
+    expect(terkirim?['pattern'], 'daily');
+    expect(terkirim?['start_date'], '2026-11-01');
+    expect(terkirim?.containsKey('partner_can_nudge'), isFalse);
+    expect(find.text('Pasangan boleh mengingatkan'), findsNothing);
+    expect(terkirim?['active'], isTrue);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('uang: tambah pengeluaran bisa dicatat juga di uang pribadi', (
+    tester,
+  ) async {
+    Future<Map<String, dynamic>?> simpan({required bool centang}) async {
+      final adaptor = await pasang(
+        tester,
+        const Scaffold(body: TambahPengeluaranSheet()),
+      );
+
+      await tester.enterText(find.byType(TextField).at(0), '80000');
+      await tester.enterText(find.byType(TextField).at(1), 'Makan malam');
+      await tester.pump();
+
+      final centangan = find.text('Catat juga di uang pribadi');
+      await tester.scrollUntilVisible(
+        centangan,
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+
+      if (centang) {
+        await tester.tap(centangan);
+        await tester.pump();
+        expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+      }
+
+      await tester.scrollUntilVisible(
+        find.text('SIMPAN'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('SIMPAN'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 3));
+
+      return adaptor.transaksiTerkirim;
+    }
+
+    final tanpa = await simpan(centang: false);
+    expect(tanpa?['amount'], 80000);
+    expect(tanpa?.containsKey('also_personal'), isFalse);
+
+    final dengan = await simpan(centang: true);
+    expect(dengan?['amount'], 80000);
+    expect(dengan?['title'], 'Makan malam');
+    expect(dengan?['also_personal'], isTrue);
+  });
+
+  testWidgets('uang pribadi: pemasukan dipotong pengeluaran', (tester) async {
+    _pribadiPemasukan = true;
+    addTearDown(() => _pribadiPemasukan = false);
+
+    await pasang(tester, const PribadiScreen());
+
+    expect(find.textContaining('Sisa uang'), findsOneWidget);
+    // 3.000.000 - 213.000
+    expect(find.text('Rp 2.787.000'), findsOneWidget);
+    expect(find.text('+Rp 3.000.000'), findsWidgets);
+    expect(find.text('-Rp 213.000'), findsOneWidget);
+    expect(
+      find.text('Dihitung ulang dari nol setiap awal bulan.'),
+      findsOneWidget,
+    );
+
+    await gulirSampaiBawah(tester);
+    expect(find.text('Gaji November'), findsOneWidget);
+    expect(find.text('Skincare'), findsOneWidget);
+  });
+
+  testWidgets('uang pribadi: lembar bisa mencatat pemasukan', (tester) async {
+    final adaptor = await pasang(tester, const Scaffold(body: LembarPribadi()));
+
+    await tester.tap(find.text('Pemasukan'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Kategori'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).at(0), '3000000');
+    await tester.enterText(find.byType(TextField).at(1), 'Gaji');
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('SIMPAN'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('SIMPAN'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(adaptor.pribadiTerkirim, hasLength(1));
+    expect(
+      adaptor.pribadiTerkirim.single,
+      startsWith('POST /api/personal-incomes '),
+    );
+    expect(adaptor.pribadiTerkirim.single, contains('"amount":3000000'));
+    expect(adaptor.pribadiTerkirim.single, contains('"title":"Gaji"'));
+    expect(adaptor.pribadiTerkirim.single, isNot(contains('category')));
     await tester.pump(const Duration(seconds: 2));
   });
 

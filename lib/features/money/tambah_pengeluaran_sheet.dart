@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +11,7 @@ import '../../models/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/berdua_widgets.dart';
 import '../auth/sesi_cubit.dart';
+import '../pribadi/pribadi_cubit.dart';
 import 'uang_cubit.dart';
 
 /// Layar 09 (Tambah pengeluaran) dan 11 (Ubah transaksi) — satu bottom sheet,
@@ -41,6 +44,9 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
   int? _payerId;
   int _porsiCustom = 50;
   late DateTime _tanggal;
+
+  /// "Catat juga di uang pribadi" (hanya untuk transaksi baru).
+  bool _jugaPribadi = false;
 
   bool _memuat = false;
   String? _galat;
@@ -149,13 +155,23 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
           split: _split,
           porsiCustom: _porsiCustom,
           tanggal: _tanggal,
+          jugaPribadi: _jugaPribadi,
         );
+      }
+
+      // Daftar uang pribadi ikut diperbarui tanpa menunggu.
+      if (!_ubah && _jugaPribadi && mounted) {
+        unawaited(context.read<PribadiCubit>().segarkan());
       }
 
       navigator.pop();
       tampilkanToastVia(
         messenger,
-        _ubah ? 'Perubahan disimpan' : 'Transaksi dicatat',
+        _ubah
+            ? 'Perubahan disimpan'
+            : _jugaPribadi
+            ? 'Dicatat di uang bersama dan pribadi'
+            : 'Transaksi dicatat',
       );
     } on ApiException catch (error) {
       if (mounted) setState(() => _galat = error.message);
@@ -370,6 +386,7 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
             ],
           ),
         _ringkasanPembagian(text, pasangan),
+        if (!_ubah) _centangPribadi(text),
         ?(_galat == null ? null : TeksGalat(_galat!)),
         TombolUtama(
           label: _ubah ? 'Simpan perubahan' : 'Simpan',
@@ -377,6 +394,49 @@ class _TambahPengeluaranSheetState extends State<TambahPengeluaranSheet> {
           onPressed: _simpan,
         ),
       ],
+    );
+  }
+
+  /// Centang untuk menyalin pengeluaran ini ke uang pribadi pencatat.
+  Widget _centangPribadi(TextTheme text) {
+    void ubah() => setState(() => _jugaPribadi = !_jugaPribadi);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: ubah,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Checkbox(value: _jugaPribadi, onChanged: (_) => ubah()),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Catat juga di uang pribadi',
+                      style: text.bodyMedium?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Salinannya hanya terlihat olehmu.',
+                      style: text.bodySmall?.copyWith(
+                        color: BerduaColors.label,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

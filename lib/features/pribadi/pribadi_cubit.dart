@@ -40,6 +40,29 @@ class PengeluaranPribadi {
   final DateTime tanggal;
 }
 
+/// Satu pemasukan pribadi (gaji, bonus, dsb.). Hanya untuk pemiliknya.
+class PemasukanPribadi {
+  const PemasukanPribadi({
+    required this.id,
+    required this.judul,
+    required this.jumlah,
+    required this.tanggal,
+  });
+
+  factory PemasukanPribadi.fromJson(Map<String, dynamic> json) =>
+      PemasukanPribadi(
+        id: json['id'] as int,
+        judul: json['title'] as String? ?? '',
+        jumlah: (json['amount'] as num).toInt(),
+        tanggal: DateTime.parse(json['date'] as String),
+      );
+
+  final int id;
+  final String judul;
+  final int jumlah;
+  final DateTime tanggal;
+}
+
 /// Jawaban `GET /api/personal-expenses?month=YYYY-MM`.
 class RingkasanPribadi {
   const RingkasanPribadi({
@@ -50,6 +73,9 @@ class RingkasanPribadi {
     required this.perKategori,
     required this.rataRataBulanan,
     required this.jumlahBulanRataRata,
+    this.pemasukan = const [],
+    this.totalPemasukan = 0,
+    this.saldo = 0,
   });
 
   factory RingkasanPribadi.fromJson(Map<String, dynamic> json) {
@@ -67,6 +93,11 @@ class RingkasanPribadi {
       ).map((k, v) => MapEntry(k, (v as num).toInt())),
       rataRataBulanan: (json['monthly_average'] as num?)?.toInt(),
       jumlahBulanRataRata: (json['averaged_months'] as num?)?.toInt() ?? 0,
+      pemasukan: (json['incomes'] as List<dynamic>? ?? [])
+          .map((e) => PemasukanPribadi.fromJson(petaJson(e)))
+          .toList(),
+      totalPemasukan: (json['income_total'] as num?)?.toInt() ?? 0,
+      saldo: (json['balance'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -83,6 +114,22 @@ class RingkasanPribadi {
   /// null selama belum ada satu bulan utuh yang tercatat.
   final int? rataRataBulanan;
   final int jumlahBulanRataRata;
+
+  /// Pemasukan bulan ini, terbaru lebih dulu.
+  final List<PemasukanPribadi> pemasukan;
+  final int totalPemasukan;
+
+  /// Sisa uang bulan ini: pemasukan dikurangi pengeluaran. Dihitung per
+  /// bulan, jadi mulai dari nol lagi setiap awal bulan.
+  final int saldo;
+
+  /// Pengeluaran dan pemasukan dicampur, terbaru lebih dulu.
+  List<Object> get semuaCatatan {
+    DateTime tgl(Object o) =>
+        o is PemasukanPribadi ? o.tanggal : (o as PengeluaranPribadi).tanggal;
+
+    return [...daftar, ...pemasukan]..sort((a, b) => tgl(b).compareTo(tgl(a)));
+  }
 }
 
 /// Bulan yang sedang dilihat di uang pribadi; tidak bisa melewati bulan ini.
@@ -198,6 +245,38 @@ class PribadiCubit extends MuatanCubit<RingkasanPribadi> {
 
   Future<void> hapus(int id) async {
     await _dio.send('DELETE', '/personal-expenses/$id');
+    await segarkan();
+  }
+
+  Map<String, dynamic> _isiPemasukan(
+    String judul,
+    int jumlah,
+    DateTime tanggal,
+  ) => {
+    'title': judul,
+    'amount': jumlah,
+    'date':
+        '${tanggal.year}-${tanggal.month.toString().padLeft(2, '0')}-'
+        '${tanggal.day.toString().padLeft(2, '0')}',
+  };
+
+  /// Pemasukan baru ([id] kosong) atau ubah yang sudah ada.
+  Future<void> simpanPemasukan({
+    int? id,
+    required String judul,
+    required int jumlah,
+    required DateTime tanggal,
+  }) async {
+    await _dio.send(
+      id == null ? 'POST' : 'PUT',
+      id == null ? '/personal-incomes' : '/personal-incomes/$id',
+      body: _isiPemasukan(judul, jumlah, tanggal),
+    );
+    await segarkan();
+  }
+
+  Future<void> hapusPemasukan(int id) async {
+    await _dio.send('DELETE', '/personal-incomes/$id');
     await segarkan();
   }
 

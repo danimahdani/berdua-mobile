@@ -105,6 +105,8 @@ class Siklus {
     this.masaSuburMulai,
     this.masaSuburSelesai,
     this.bulan,
+    this.haidBerjalan = false,
+    this.haidSelesaiHariIni = false,
   });
 
   factory Siklus.fromJson(Map<String, dynamic> json) {
@@ -121,6 +123,7 @@ class Siklus {
     }
 
     final masaSubur = json['fertile_window'] as Map<String, dynamic>?;
+    final statusHaid = json['period_status'] as Map<String, dynamic>?;
 
     return Siklus(
       tercatat: true,
@@ -148,6 +151,8 @@ class Siklus {
       masaSuburMulai: _tanggal(masaSubur?['start']),
       masaSuburSelesai: _tanggal(masaSubur?['end']),
       bulan: _tanggal(json['month'] is String ? '${json['month']}-01' : null),
+      haidBerjalan: statusHaid?['ongoing'] == true,
+      haidSelesaiHariIni: statusHaid?['ended_today'] == true,
     );
   }
 
@@ -180,6 +185,13 @@ class Siklus {
 
   /// Bulan yang ditampilkan kalender (tanggal 1).
   final DateTime? bulan;
+
+  /// Haid terakhir belum ditandai selesai: tombol "Haid mulai" diganti
+  /// "Haid selesai".
+  final bool haidBerjalan;
+
+  /// Haid baru ditandai selesai hari ini (masih bisa dibatalkan).
+  final bool haidSelesaiHariIni;
 
   String get faseLabel =>
       fase.isEmpty ? '' : 'Fase ${fase[0].toUpperCase()}${fase.substring(1)}';
@@ -280,6 +292,26 @@ class SiklusCubit extends MuatanCubit<Siklus> {
   Future<void> tandaiHaidMulai() async {
     await _dio.send('POST', '/cycle/period');
     await _segarkan();
+  }
+
+  /// "Haid selesai hari ini": menutup haid yang sedang berjalan.
+  Future<void> tandaiHaidSelesai() async {
+    await _dio.send('PUT', '/cycle/days/${_hariIniKawat()}/period-end');
+    await _segarkan();
+  }
+
+  /// Membatalkan tanda selesai hari ini (salah ketuk).
+  Future<void> batalHaidSelesai() async {
+    await _dio.send('DELETE', '/cycle/days/${_hariIniKawat()}/period-end');
+    await _segarkan();
+  }
+
+  static String _hariIniKawat() {
+    final k = DateTime.now();
+
+    return '${k.year.toString().padLeft(4, '0')}-'
+        '${k.month.toString().padLeft(2, '0')}-'
+        '${k.day.toString().padLeft(2, '0')}';
   }
 
   /// "Bagaimana rasanya hari ini?" — mengirim daftar lengkap, bukan selisih.

@@ -64,19 +64,24 @@ class UangCubit extends MuatanCubit<RingkasanUang> {
     required CaraPembagian split,
     int? porsiCustom,
     DateTime? tanggal,
+    bool jugaPribadi = false,
   }) async {
     await _dio.send(
       'POST',
       '/transactions',
-      body: _payload(
-        judul: judul,
-        kategori: kategori,
-        jumlah: jumlah,
-        payerId: payerId,
-        split: split,
-        porsiCustom: porsiCustom,
-        tanggal: tanggal,
-      ),
+      body: {
+        ..._payload(
+          judul: judul,
+          kategori: kategori,
+          jumlah: jumlah,
+          payerId: payerId,
+          split: split,
+          porsiCustom: porsiCustom,
+          tanggal: tanggal,
+        ),
+        // Salinan di uang pribadi pencatat (hanya terlihat olehnya).
+        if (jugaPribadi) 'also_personal': true,
+      },
     );
 
     await _segarkan();

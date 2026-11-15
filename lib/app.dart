@@ -10,6 +10,7 @@ import 'features/auth/masuk_screen.dart';
 import 'features/auth/onboarding_screen.dart';
 import 'features/beranda/beranda_cubit.dart';
 import 'features/beranda/beranda_screen.dart';
+import 'features/bersama/bersama_cubit.dart';
 import 'features/bersama/bersama_screen.dart';
 import 'features/bersama/tabungan_detail_screen.dart';
 import 'features/kuis/kuis_cubit.dart';
@@ -22,6 +23,7 @@ import 'features/notifikasi/notifikasi_screen.dart';
 import 'features/profil/profil_screen.dart';
 import 'features/siklus/catatan_hari_screen.dart';
 import 'features/siklus/riwayat_screen.dart';
+import 'features/siklus/pil_kb.dart';
 import 'features/siklus/siklus_screen.dart';
 import 'theme/berdua_theme.dart';
 import 'theme/tokens.dart';
@@ -247,10 +249,29 @@ class _BerduaAppState extends State<BerduaApp> {
 
   /// Hanya rute yang dikenal yang dibuka dari notifikasi.
   void _bukaRute(String rute) {
-    if (rute != '/kuis') return;
+    if (rute != '/kuis' && rute != '/bersama/jadwal' && rute != '/siklus') {
+      return;
+    }
 
     if (!_diDalam) {
       _ruteTertunda = rute;
+
+      return;
+    }
+
+    // Pengingat pil KB: buka tab Siklus dengan status pil terbaru.
+    if (rute == '/siklus') {
+      context.read<PilCubit>().segarkan();
+      _router.go('/siklus');
+
+      return;
+    }
+
+    // Pengingat jadwal (berdua atau pribadi): buka tab Bersama bagian Jadwal.
+    if (rute == '/bersama/jadwal') {
+      context.read<BagianBersamaCubit>().pilih(BagianBersama.jadwal);
+      context.read<JadwalCubit>().segarkan();
+      _router.go('/bersama');
 
       return;
     }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +22,7 @@ import 'notifikasi_cubit.dart';
     latar: BerduaColors.mintSoft,
     warna: BerduaColors.mintText,
   ),
-  'period_forecast' => (
+  'period_forecast' || 'pill_reminder' => (
     latar: BerduaColors.rakaSoft,
     warna: BerduaColors.rakaText,
   ),
@@ -38,6 +40,11 @@ class NotifikasiScreen extends StatelessWidget {
 
   /// Mengetuk notifikasi membawa ke tempat kejadiannya.
   void _buka(BuildContext context, Notifikasi row) {
+    // Hanya notifikasi yang diketuk yang ditandai dibaca.
+    if (!row.read) {
+      unawaited(context.read<NotifikasiCubit>().tandaiDibaca(row.id));
+    }
+
     void keBersama(BagianBersama bagian) {
       context.read<BagianBersamaCubit>().pilih(bagian);
       context.go('/bersama');
@@ -46,7 +53,7 @@ class NotifikasiScreen extends StatelessWidget {
     switch (row.type) {
       case 'transaction_new' || 'transaction_changed' || 'settlement':
         context.go('/uang');
-      case 'period_forecast':
+      case 'period_forecast' || 'pill_reminder':
         context.go('/siklus');
       case 'todo_due':
         keBersama(BagianBersama.todo);

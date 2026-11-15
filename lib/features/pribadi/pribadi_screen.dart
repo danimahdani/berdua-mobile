@@ -166,7 +166,7 @@ class _Isi extends StatelessWidget {
           _Kategori(data: data),
         ],
         const SizedBox(height: Gap.xl),
-        if (data.daftar.isEmpty)
+        if (data.daftar.isEmpty && data.pemasukan.isEmpty)
           KartuBerdua(
             radius: Radii.button,
             padding: const EdgeInsets.all(Gap.xl),
@@ -175,14 +175,15 @@ class _Isi extends StatelessWidget {
                 const Stiker.sedang(JenisStiker.piggy),
                 const SizedBox(height: Gap.sm),
                 Text(
-                  'Belum ada pengeluaran pribadi di '
+                  'Belum ada catatan pribadi di '
                   '${TanggalId.month(data.bulan)}',
                   textAlign: TextAlign.center,
                   style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: Gap.xs),
                 Text(
-                  'Ketuk tombol + untuk mencatat.',
+                  'Ketuk tombol + untuk mencatat pengeluaran atau '
+                  'pemasukan.',
                   style: text.labelSmall?.copyWith(fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
@@ -190,8 +191,11 @@ class _Isi extends StatelessWidget {
             ),
           )
         else
-          for (final p in data.daftar) ...[
-            _Baris(pengeluaran: p),
+          for (final c in data.semuaCatatan) ...[
+            if (c is PemasukanPribadi)
+              _BarisPemasukan(pemasukan: c)
+            else
+              _Baris(pengeluaran: c as PengeluaranPribadi),
             const SizedBox(height: Gap.sm),
           ],
       ],
@@ -286,48 +290,156 @@ class _Ringkasan extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final rataRata = data.rataRataBulanan;
     final selisih = data.total - data.totalBulanLalu;
+    final adaPemasukan = data.totalPemasukan > 0;
+    final minus = data.saldo < 0;
+    final kecil = text.labelSmall?.copyWith(fontSize: 14, height: 1.4);
 
     return KartuRose(
       warna: BerduaColors.rakaSoft,
       stiker: JenisStiker.piggy,
       child: Column(
         children: [
-          Text(
-            'Total ${TanggalId.month(data.bulan)}',
-            style: text.bodyMedium?.copyWith(color: BerduaColors.label),
-          ),
-          const SizedBox(height: Gap.sm),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: AngkaBerbingkai(Rupiah.format(data.total)),
-          ),
-          const SizedBox(height: Gap.md),
-          Text(
-            rataRata == null
-                ? 'Rata-rata per bulan muncul setelah satu bulan penuh '
-                      'tercatat.'
-                : 'Rata-rata per bulan ${Rupiah.format(rataRata)} '
-                      '(${data.jumlahBulanRataRata} bulan terakhir)',
-            textAlign: TextAlign.center,
-            style: text.labelSmall?.copyWith(fontSize: 14, height: 1.4),
-          ),
-          if (data.totalBulanLalu > 0) ...[
-            const SizedBox(height: 4),
+          if (adaPemasukan) ...[
+            // Sisa uang: pemasukan bulan ini dipotong pengeluarannya.
             Text(
-              selisih == 0
-                  ? 'Sama dengan bulan lalu'
-                  : '${selisih > 0 ? "Naik" : "Turun"} '
-                        '${Rupiah.format(selisih.abs())} dari bulan lalu',
-              textAlign: TextAlign.center,
-              style: text.labelSmall?.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: selisih > 0
-                    ? BerduaColors.roseText
-                    : BerduaColors.mintText,
+              'Sisa uang ${TanggalId.month(data.bulan)}',
+              style: text.bodyMedium?.copyWith(color: BerduaColors.label),
+            ),
+            const SizedBox(height: Gap.sm),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AngkaBerbingkai(
+                '${minus ? '-' : ''}${Rupiah.format(data.saldo.abs())}',
               ),
             ),
+            const SizedBox(height: Gap.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _AngkaKecil(
+                    label: 'Pemasukan',
+                    nilai: '+${Rupiah.format(data.totalPemasukan)}',
+                    warna: BerduaColors.mintText,
+                  ),
+                ),
+                const SizedBox(width: Gap.sm),
+                Expanded(
+                  child: _AngkaKecil(
+                    label: 'Pengeluaran',
+                    nilai: '-${Rupiah.format(data.total)}',
+                    warna: BerduaColors.roseText,
+                  ),
+                ),
+              ],
+            ),
+            if (minus) ...[
+              const SizedBox(height: Gap.sm),
+              Text(
+                'Pengeluaran melebihi pemasukan bulan ini.',
+                textAlign: TextAlign.center,
+                style: kecil?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: BerduaColors.roseText,
+                ),
+              ),
+            ],
+            const SizedBox(height: Gap.sm),
+            Text(
+              'Dihitung ulang dari nol setiap awal bulan.',
+              textAlign: TextAlign.center,
+              style: kecil,
+            ),
+          ] else ...[
+            Text(
+              'Total ${TanggalId.month(data.bulan)}',
+              style: text.bodyMedium?.copyWith(color: BerduaColors.label),
+            ),
+            const SizedBox(height: Gap.sm),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AngkaBerbingkai(Rupiah.format(data.total)),
+            ),
+            const SizedBox(height: Gap.md),
+            Text(
+              rataRata == null
+                  ? 'Rata-rata per bulan muncul setelah satu bulan penuh '
+                        'tercatat.'
+                  : 'Rata-rata per bulan ${Rupiah.format(rataRata)} '
+                        '(${data.jumlahBulanRataRata} bulan terakhir)',
+              textAlign: TextAlign.center,
+              style: kecil,
+            ),
+            if (data.totalBulanLalu > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                selisih == 0
+                    ? 'Sama dengan bulan lalu'
+                    : '${selisih > 0 ? "Naik" : "Turun"} '
+                          '${Rupiah.format(selisih.abs())} dari bulan lalu',
+                textAlign: TextAlign.center,
+                style: kecil?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: selisih > 0
+                      ? BerduaColors.roseText
+                      : BerduaColors.mintText,
+                ),
+              ),
+            ],
           ],
+          const SizedBox(height: Gap.md),
+          TombolTeks(
+            label: adaPemasukan ? 'Tambah pemasukan' : 'Catat pemasukan',
+            ukuran: 15,
+            tebal: FontWeight.w600,
+            onTap: () => LembarPribadi.buka(context, pemasukanBaru: true),
+          ),
+          if (!adaPemasukan)
+            Text(
+              'Pemasukan otomatis dipotong pengeluaranmu.',
+              textAlign: TextAlign.center,
+              style: kecil,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AngkaKecil extends StatelessWidget {
+  const _AngkaKecil({
+    required this.label,
+    required this.nilai,
+    required this.warna,
+  });
+
+  final String label;
+  final String nilai;
+  final Color warna;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: BerduaColors.card,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: text.labelSmall),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              nilai,
+              style: text.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: warna,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -446,17 +558,59 @@ class _Baris extends StatelessWidget {
   }
 }
 
-/// Lembar tambah / ubah pengeluaran pribadi, dengan tombol hapus saat ubah.
+class _BarisPemasukan extends StatelessWidget {
+  const _BarisPemasukan({required this.pemasukan});
+
+  final PemasukanPribadi pemasukan;
+
+  @override
+  Widget build(BuildContext context) {
+    return KartuDaftar(
+      leading: const UbinIkon(
+        ikon: Icons.south_west_rounded,
+        latar: BerduaColors.mintSoft,
+        warna: BerduaColors.mintText,
+        ukuran: 44,
+        radius: 14,
+      ),
+      judul: pemasukan.judul,
+      keterangan: 'Pemasukan',
+      trailing: '+${Rupiah.format(pemasukan.jumlah)}',
+      trailingBawah: TanggalId.short(pemasukan.tanggal),
+      onTap: () => LembarPribadi.buka(context, pemasukan: pemasukan),
+    );
+  }
+}
+
+/// Lembar tambah / ubah pengeluaran atau pemasukan pribadi, dengan tombol
+/// hapus saat ubah. Saat menambah, jenisnya bisa dipilih di atas.
 class LembarPribadi extends StatefulWidget {
-  const LembarPribadi({super.key, this.pengeluaran});
+  const LembarPribadi({
+    super.key,
+    this.pengeluaran,
+    this.pemasukan,
+    this.pemasukanBaru = false,
+  });
 
   final PengeluaranPribadi? pengeluaran;
+  final PemasukanPribadi? pemasukan;
+
+  /// Lembar baru langsung dalam mode pemasukan.
+  final bool pemasukanBaru;
 
   static Future<void> buka(
     BuildContext context, {
     PengeluaranPribadi? pengeluaran,
-  }) =>
-      bukaLembar<void>(context, (_) => LembarPribadi(pengeluaran: pengeluaran));
+    PemasukanPribadi? pemasukan,
+    bool pemasukanBaru = false,
+  }) => bukaLembar<void>(
+    context,
+    (_) => LembarPribadi(
+      pengeluaran: pengeluaran,
+      pemasukan: pemasukan,
+      pemasukanBaru: pemasukanBaru,
+    ),
+  );
 
   @override
   State<LembarPribadi> createState() => _LembarPribadiState();
@@ -464,22 +618,28 @@ class LembarPribadi extends StatefulWidget {
 
 class _LembarPribadiState extends State<LembarPribadi> {
   late final _judul = TextEditingController(
-    text: widget.pengeluaran?.judul ?? '',
+    text: widget.pengeluaran?.judul ?? widget.pemasukan?.judul ?? '',
   );
   late final _jumlah = TextEditingController(
-    text: widget.pengeluaran == null
-        ? ''
-        : Rupiah.bare(widget.pengeluaran!.jumlah),
+    text: switch ((widget.pengeluaran, widget.pemasukan)) {
+      (final PengeluaranPribadi p, _) => Rupiah.bare(p.jumlah),
+      (_, final PemasukanPribadi p) => Rupiah.bare(p.jumlah),
+      _ => '',
+    },
   );
   late String _kategori =
       widget.pengeluaran?.kategori ?? BerduaEnums.categories.first;
-  late DateTime _tanggal = widget.pengeluaran?.tanggal ?? _hariIni();
+  late DateTime _tanggal =
+      widget.pengeluaran?.tanggal ?? widget.pemasukan?.tanggal ?? _hariIni();
+
+  /// true = mencatat pemasukan, false = pengeluaran.
+  late bool _pemasukan = widget.pemasukan != null || widget.pemasukanBaru;
 
   bool _memuat = false;
   bool _menghapus = false;
   String? _galat;
 
-  bool get _ubah => widget.pengeluaran != null;
+  bool get _ubah => widget.pengeluaran != null || widget.pemasukan != null;
 
   static DateTime _hariIni() {
     final n = DateTime.now();
@@ -515,7 +675,11 @@ class _LembarPribadiState extends State<LembarPribadi> {
     }
 
     if (_judul.text.trim().isEmpty) {
-      setState(() => _galat = 'Tulis dulu untuk apa pengeluarannya.');
+      setState(
+        () => _galat = _pemasukan
+            ? 'Tulis dulu dari mana pemasukannya.'
+            : 'Tulis dulu untuk apa pengeluarannya.',
+      );
 
       return;
     }
@@ -530,7 +694,14 @@ class _LembarPribadiState extends State<LembarPribadi> {
     });
 
     try {
-      if (_ubah) {
+      if (_pemasukan) {
+        await cubit.simpanPemasukan(
+          id: widget.pemasukan?.id,
+          judul: _judul.text.trim(),
+          jumlah: jumlah,
+          tanggal: _tanggal,
+        );
+      } else if (_ubah) {
         await cubit.ubah(
           id: widget.pengeluaran!.id,
           judul: _judul.text.trim(),
@@ -550,7 +721,11 @@ class _LembarPribadiState extends State<LembarPribadi> {
       navigator.pop();
       tampilkanToastVia(
         messenger,
-        _ubah ? 'Perubahan disimpan' : 'Pengeluaran pribadi dicatat',
+        _ubah
+            ? 'Perubahan disimpan'
+            : _pemasukan
+            ? 'Pemasukan dicatat'
+            : 'Pengeluaran pribadi dicatat',
       );
     } on ApiException catch (error) {
       if (mounted) setState(() => _galat = error.message);
@@ -567,9 +742,16 @@ class _LembarPribadiState extends State<LembarPribadi> {
     setState(() => _menghapus = true);
 
     try {
-      await cubit.hapus(widget.pengeluaran!.id);
+      if (widget.pemasukan != null) {
+        await cubit.hapusPemasukan(widget.pemasukan!.id);
+      } else {
+        await cubit.hapus(widget.pengeluaran!.id);
+      }
       navigator.pop();
-      tampilkanToastVia(messenger, 'Pengeluaran pribadi dihapus');
+      tampilkanToastVia(
+        messenger,
+        _pemasukan ? 'Pemasukan dihapus' : 'Pengeluaran pribadi dihapus',
+      );
     } on ApiException catch (error) {
       if (mounted) setState(() => _menghapus = false);
       tampilkanToastVia(messenger, error.message);
@@ -584,8 +766,25 @@ class _LembarPribadiState extends State<LembarPribadi> {
     final lain = _tanggal != hariIni && _tanggal != kemarin;
 
     return IsiLembar(
-      judul: _ubah ? 'Ubah pengeluaran pribadi' : 'Pengeluaran pribadi',
+      judul: switch ((_ubah, _pemasukan)) {
+        (true, true) => 'Ubah pemasukan',
+        (true, false) => 'Ubah pengeluaran pribadi',
+        (false, true) => 'Pemasukan pribadi',
+        (false, false) => 'Pengeluaran pribadi',
+      },
       children: [
+        // Jenis hanya dipilih saat menambah.
+        if (!_ubah)
+          SegmenBerdua<bool>(
+            gaya: GayaSegmen.sheet,
+            pilihan: const [false, true],
+            terpilih: _pemasukan,
+            label: (masuk) => masuk ? 'Pemasukan' : 'Pengeluaran',
+            onPilih: (masuk) => setState(() {
+              _pemasukan = masuk;
+              _galat = null;
+            }),
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           decoration: BoxDecoration(
@@ -683,28 +882,37 @@ class _LembarPribadiState extends State<LembarPribadi> {
           textCapitalization: TextCapitalization.sentences,
           style: text.bodyLarge?.copyWith(fontSize: 17),
           inputFormatters: [LengthLimitingTextInputFormatter(80)],
-          decoration: const InputDecoration(
-            hintText: 'Untuk apa? mis. Kopi, skincare',
+          decoration: InputDecoration(
+            hintText: _pemasukan
+                ? 'Dari mana? mis. Gaji, bonus'
+                : 'Untuk apa? mis. Kopi, skincare',
           ),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const LabelIsian('Kategori'),
-            Wrap(
-              spacing: Gap.sm,
-              runSpacing: Gap.sm,
-              children: [
-                for (final kategori in BerduaEnums.categories)
-                  ChipBerdua(
-                    label: kategori,
-                    aktif: _kategori == kategori,
-                    onTap: () => setState(() => _kategori = kategori),
-                  ),
-              ],
-            ),
-          ],
-        ),
+        if (_pemasukan)
+          Text(
+            'Pemasukan bulan ini otomatis dipotong pengeluaran pribadimu. '
+            'Sisanya dihitung ulang dari nol setiap awal bulan.',
+            style: text.bodySmall?.copyWith(color: BerduaColors.label),
+          ),
+        if (!_pemasukan)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const LabelIsian('Kategori'),
+              Wrap(
+                spacing: Gap.sm,
+                runSpacing: Gap.sm,
+                children: [
+                  for (final kategori in BerduaEnums.categories)
+                    ChipBerdua(
+                      label: kategori,
+                      aktif: _kategori == kategori,
+                      onTap: () => setState(() => _kategori = kategori),
+                    ),
+                ],
+              ),
+            ],
+          ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -746,7 +954,9 @@ class _LembarPribadiState extends State<LembarPribadi> {
                     child: CircularProgressIndicator(strokeWidth: 2.4),
                   )
                 : TombolTeks(
-                    label: 'Hapus pengeluaran ini',
+                    label: _pemasukan
+                        ? 'Hapus pemasukan ini'
+                        : 'Hapus pengeluaran ini',
                     ukuran: 15,
                     onTap: _memuat ? () {} : _hapus,
                   ),

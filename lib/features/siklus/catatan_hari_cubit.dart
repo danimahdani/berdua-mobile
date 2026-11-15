@@ -133,6 +133,8 @@ class CatatanHari {
     required this.akhirDiSini,
     required this.bisaAkhiri,
     required this.isi,
+    this.bisaUbah = true,
+    this.namaPemilik = '',
   });
 
   factory CatatanHari.fromJson(Map<String, dynamic> json) {
@@ -151,6 +153,9 @@ class CatatanHari {
       isi: IsiCatatan.fromJson(
         json['log'] as Map<String, dynamic>? ?? const {},
       ),
+      // Pasangan yang dibagi hanya bisa melihat.
+      bisaUbah: json['can_edit'] != false,
+      namaPemilik: json['owner_name'] as String? ?? '',
     );
   }
 
@@ -172,6 +177,12 @@ class CatatanHari {
   final bool bisaAkhiri;
 
   final IsiCatatan isi;
+
+  /// false = dibuka pasangan: hanya-baca.
+  final bool bisaUbah;
+
+  /// Nama pencatat yang punya catatan ini.
+  final String namaPemilik;
 }
 
 /// "2026-11-12" untuk alamat API dan rute.
@@ -180,7 +191,8 @@ String tanggalKawat(DateTime tanggal) =>
     '${tanggal.month.toString().padLeft(2, '0')}-'
     '${tanggal.day.toString().padLeft(2, '0')}';
 
-/// Catatan harian satu tanggal. Hanya dipakai pencatat siklus.
+/// Catatan harian satu tanggal. Pencatat bisa mengubah; pasangan yang
+/// dibagi hanya memuat dan melihatnya.
 class CatatanHariCubit extends MuatanCubit<CatatanHari> {
   CatatanHariCubit(this._dio, this._siklus, this.tanggal);
 

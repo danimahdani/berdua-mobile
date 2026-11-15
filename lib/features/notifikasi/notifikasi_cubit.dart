@@ -29,6 +29,14 @@ class Notifikasi {
   final bool read;
   final DateTime createdAt;
 
+  Notifikasi sudahDibaca() => Notifikasi(
+    id: id,
+    type: type,
+    text: text,
+    read: true,
+    createdAt: createdAt,
+  );
+
   /// Ikon per pemicu di §5.5.
   IconData get ikon => switch (type) {
     'transaction_new' => Icons.receipt_long_outlined,
@@ -37,6 +45,7 @@ class Notifikasi {
     'period_forecast' => Icons.favorite_outline,
     'todo_due' => Icons.task_alt_outlined,
     'event_reminder' => Icons.event_outlined,
+    'pill_reminder' => Icons.medication_outlined,
     'shopping_new' => Icons.shopping_basket_outlined,
     'saving_milestone' => Icons.savings_outlined,
     _ => Icons.notifications_none,
@@ -57,6 +66,31 @@ class NotifikasiCubit extends MuatanCubit<List<Notifikasi>> {
     return (data['data'] as List<dynamic>)
         .map((e) => Notifikasi.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Mengetuk satu notifikasi: hanya yang itu jadi dibaca. Tampilannya
+  /// langsung berubah; kalau backend gagal, daftar dimuat ulang apa adanya.
+  Future<void> tandaiDibaca(int id) async {
+    final rows = state.nilai;
+
+    if (rows == null || !rows.any((row) => row.id == id && !row.read)) return;
+
+    emit(
+      Muatan.data([
+        for (final row in rows) row.id == id ? row.sudahDibaca() : row,
+      ]),
+    );
+
+    try {
+      await _dio.send('POST', '/notifications/$id/read');
+    } catch (_) {
+      await segarkan();
+
+      return;
+    }
+
+    // Lonceng di layar 06 ikut diperbarui.
+    await _beranda.segarkan();
   }
 
   Future<void> tandaiSemuaDibaca() async {

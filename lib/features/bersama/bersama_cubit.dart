@@ -340,6 +340,10 @@ class Acara {
     required this.daysUntil,
     required this.remindBefore,
     required this.yearly,
+    this.tanggal,
+    this.ulangSatuan,
+    this.ulangSetiap = 1,
+    this.pribadi = false,
   });
 
   factory Acara.fromJson(Map<String, dynamic> json) => Acara(
@@ -350,15 +354,52 @@ class Acara {
     daysUntil: json['days_until'] as int? ?? 0,
     remindBefore: json['remind_before'] as int? ?? 0,
     yearly: json['yearly'] as bool? ?? false,
+    tanggal: json['date'] is String
+        ? DateTime.parse(json['date'] as String)
+        : null,
+    // Data lama hanya punya `yearly`.
+    ulangSatuan:
+        json['repeat_unit'] as String? ??
+        ((json['yearly'] as bool? ?? false) ? 'year' : null),
+    ulangSetiap: json['repeat_interval'] as int? ?? 1,
+    pribadi: json['personal'] as bool? ?? false,
   );
 
   final int id;
   final String title;
   final String type;
+
+  /// Tanggal yang dipilih saat dibuat (awal pengulangan); dipakai saat diubah.
+  final DateTime? tanggal;
   final DateTime nextOccurrence;
   final int daysUntil;
   final int remindBefore;
   final bool yearly;
+
+  /// `day`, `week`, `month`, `year`, atau null (tidak berulang).
+  final String? ulangSatuan;
+
+  /// "setiap [ulangSetiap] [ulangSatuan]".
+  final int ulangSetiap;
+
+  /// Jadwal pribadi: hanya terlihat dan diingatkan ke pemiliknya.
+  final bool pribadi;
+
+  static const namaSatuan = {
+    'day': 'hari',
+    'week': 'minggu',
+    'month': 'bulan',
+    'year': 'tahun',
+  };
+
+  /// mis. "setiap 3 hari", "setiap minggu"; null kalau tidak berulang.
+  String? get labelUlang {
+    final satuan = namaSatuan[ulangSatuan];
+
+    if (satuan == null) return null;
+
+    return ulangSetiap <= 1 ? 'setiap $satuan' : 'setiap $ulangSetiap $satuan';
+  }
 
   String get labelPengingat => switch (remindBefore) {
     0 => 'Hari H',
@@ -383,27 +424,51 @@ class JadwalCubit extends MuatanCubit<List<Acara>> {
         .toList();
   }
 
-  Future<void> tambah({
+  /// Tambah jadwal baru, atau ubah yang sudah ada kalau [id] diisi.
+  Future<void> simpan({
+    int? id,
     required String judul,
     required DateTime tanggal,
     required String jenis,
     required int ingatkan,
-    required bool tahunan,
+    String? ulangSatuan,
+    int ulangSetiap = 1,
+    bool pribadi = false,
   }) async {
     await _dio.send(
-      'POST',
-      '/events',
+      id == null ? 'POST' : 'PATCH',
+      id == null ? '/events' : '/events/$id',
       body: {
         'title': judul,
         'date': _tanggal(tanggal),
         'type': jenis,
         'remind_before': ingatkan,
-        'yearly': tahunan,
+        'repeat_unit': ulangSatuan,
+        'repeat_interval': ulangSatuan == null ? 1 : ulangSetiap,
+        'personal': pribadi,
       },
     );
 
     await _segarkan();
   }
+
+  Future<void> tambah({
+    required String judul,
+    required DateTime tanggal,
+    required String jenis,
+    required int ingatkan,
+    String? ulangSatuan,
+    int ulangSetiap = 1,
+    bool pribadi = false,
+  }) => simpan(
+    judul: judul,
+    tanggal: tanggal,
+    jenis: jenis,
+    ingatkan: ingatkan,
+    ulangSatuan: ulangSatuan,
+    ulangSetiap: ulangSetiap,
+    pribadi: pribadi,
+  );
 
   Future<void> hapus(int id) async {
     await _dio.send('DELETE', '/events/$id');

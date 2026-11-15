@@ -13,6 +13,7 @@ import 'features/laporan/rata_rata_cubit.dart';
 import 'features/money/uang_cubit.dart';
 import 'features/notifikasi/notifikasi_cubit.dart';
 import 'features/pribadi/pribadi_cubit.dart';
+import 'features/siklus/pil_kb.dart';
 import 'features/siklus/siklus_cubit.dart';
 
 /// Menyediakan klien HTTP dan semua cubit aplikasi untuk seluruh pohon
@@ -93,6 +94,7 @@ class PenyediaBerdua extends StatelessWidget {
             create: (context) => SiklusCubit(context.read(), context.read()),
           ),
           BlocProvider(create: (context) => RiwayatSiklusCubit(context.read())),
+          BlocProvider(create: (context) => PilCubit(context.read())),
           BlocProvider(
             create: (context) =>
                 NotifikasiCubit(context.read(), context.read()),

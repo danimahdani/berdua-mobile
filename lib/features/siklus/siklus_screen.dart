@@ -10,6 +10,7 @@ import '../../widgets/skeleton.dart';
 import '../auth/sesi_cubit.dart';
 import 'catatan_hari_cubit.dart';
 import 'katalog_catatan.dart';
+import 'pil_kb.dart';
 import 'siklus_cubit.dart';
 
 /// Layar 13 (tampilan pencatat) dan 14 (tampilan pasangan).
@@ -49,7 +50,10 @@ class _Isi extends StatelessWidget {
     final pencatat = sesi.user?.tracksCycle ?? false;
     final nama = data.ownerName.isEmpty ? 'Pasanganmu' : data.ownerName;
 
-    Future<void> segarkan() => context.read<SiklusCubit>().segarkan();
+    Future<void> segarkan() => Future.wait([
+      context.read<SiklusCubit>().segarkan(),
+      context.read<PilCubit>().segarkan(),
+    ]);
 
     // Belum ada catatan sama sekali.
     if (!data.tercatat) {
@@ -73,7 +77,8 @@ class _Isi extends StatelessWidget {
           ),
           if (pencatat) ...[
             const SizedBox(height: Gap.xl),
-            const _TombolHaidMulai(),
+            _TombolHaid(data: data),
+            const KartuPil(),
           ],
         ],
       );
@@ -95,6 +100,7 @@ class _Isi extends StatelessWidget {
                 : 'Kalender dan tips dukungan muncul di sini setelah $nama '
                       'mengaktifkan berbagi di Profil.',
           ),
+          const KartuPil(),
         ],
       );
     }
@@ -126,11 +132,12 @@ class _Isi extends StatelessWidget {
             gejala: data.gejalaHariIni,
             catatan: sesi.partner == null
                 ? 'Hanya kamu yang melihat catatan harian ini.'
-                : 'Hanya kamu yang melihat catatan harian. $namaPasangan '
-                      'tidak melihatnya, juga saat siklus dibagikan.',
+                : 'Selama siklus dibagikan, $namaPasangan bisa melihat '
+                      'catatan harianmu, tetapi tidak bisa mengubahnya.',
           ),
           const SizedBox(height: Gap.lg),
-          const _TombolHaidMulai(),
+          _TombolHaid(data: data),
+          const KartuPil(),
         ],
 
         if (data.tips != null) ...[
@@ -139,6 +146,7 @@ class _Isi extends StatelessWidget {
         ],
 
         if (!data.bisaUbah) ...[
+          const KartuPil(),
           const SizedBox(height: Gap.betweenCards),
           KartuBerdua(
             radius: Radii.button,
@@ -611,7 +619,8 @@ class _KalenderState extends State<_Kalender> {
             ),
           ),
           const SizedBox(height: 10),
-          _Legenda(adaCatatan: data.bisaUbah),
+          // Penanda catatan ikut terlihat oleh pasangan yang dibagi.
+          const _Legenda(adaCatatan: true),
           if (terpilih != null) ...[
             const SizedBox(height: Gap.md),
             _RincianHari(hari: terpilih, bisaUbah: data.bisaUbah),
@@ -680,6 +689,26 @@ class _RincianHari extends StatelessWidget {
             '${hari.perkiraan ? " (perkiraan)" : ""}',
             style: text.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
           ),
+          if (!bisaUbah && !belumTiba) ...[
+            const SizedBox(height: 4),
+            Text(
+              tercatat.isEmpty
+                  ? 'Belum ada catatan di tanggal ini.'
+                  : 'Tercatat: ${tercatat.join(", ")}',
+              style: text.labelSmall?.copyWith(fontSize: 13, height: 1.45),
+            ),
+            if (tercatat.isNotEmpty) ...[
+              const SizedBox(height: Gap.md),
+              TombolPink(
+                label: 'Lihat catatan',
+                tinggi: 46,
+                ukuranHuruf: 16,
+                tebal: FontWeight.w600,
+                onPressed: () =>
+                    context.push('/siklus/hari/${tanggalKawat(hari.tanggal)}'),
+              ),
+            ],
+          ],
           if (bisaUbah) ...[
             const SizedBox(height: 4),
             Text(
@@ -1019,36 +1048,91 @@ class _KartuCatatanHariIni extends StatelessWidget {
   }
 }
 
-class _TombolHaidMulai extends StatefulWidget {
-  const _TombolHaidMulai();
+/// Tombol haid untuk pencatat, mengikuti keadaan haid terakhir:
+/// - belum ada haid berjalan: "Haid mulai hari ini";
+/// - haid sedang berjalan: "Haid selesai hari ini" ("mulai" disembunyikan);
+/// - baru ditandai selesai hari ini: keterangan dan "Batalkan".
+class _TombolHaid extends StatefulWidget {
+  const _TombolHaid({required this.data});
+
+  final Siklus data;
 
   @override
-  State<_TombolHaidMulai> createState() => _TombolHaidMulaiState();
+  State<_TombolHaid> createState() => _TombolHaidState();
 }
 
-class _TombolHaidMulaiState extends State<_TombolHaidMulai> {
+class _TombolHaidState extends State<_TombolHaid> {
   bool _memuat = false;
+
+  Future<void> _kirim(Future<void> Function() aksi, String berhasil) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _memuat = true);
+
+    try {
+      await aksi();
+      tampilkanToastVia(messenger, berhasil);
+    } on ApiException catch (error) {
+      tampilkanToastVia(messenger, error.message);
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cubit = context.read<SiklusCubit>();
+    final data = widget.data;
+
+    if (data.haidSelesaiHariIni) {
+      return KartuBerdua(
+        radius: Radii.button,
+        bayangan: false,
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: BerduaColors.ink),
+            const SizedBox(width: Gap.sm),
+            Expanded(
+              child: Text(
+                'Haid ditandai selesai hari ini.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            TombolTeks(
+              label: 'Batalkan',
+              onTap: _memuat
+                  ? null
+                  : () => _kirim(
+                      cubit.batalHaidSelesai,
+                      'Tanda selesai dibatalkan.',
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (data.haidBerjalan) {
+      return TombolUtama(
+        label: 'Haid selesai hari ini',
+        ukuranHuruf: 18,
+        memuat: _memuat,
+        onPressed: () => _kirim(
+          cubit.tandaiHaidSelesai,
+          'Haid ditandai selesai. Prediksi diperbarui.',
+        ),
+      );
+    }
+
     return TombolUtama(
       label: 'Haid mulai hari ini',
       ukuranHuruf: 18,
       memuat: _memuat,
-      onPressed: () async {
-        final messenger = ScaffoldMessenger.of(context);
-
-        setState(() => _memuat = true);
-
-        try {
-          await context.read<SiklusCubit>().tandaiHaidMulai();
-          tampilkanToastVia(messenger, 'Tercatat. Prediksi diperbarui.');
-        } on ApiException catch (error) {
-          tampilkanToastVia(messenger, error.message);
-        } finally {
-          if (mounted) setState(() => _memuat = false);
-        }
-      },
+      onPressed: () =>
+          _kirim(cubit.tandaiHaidMulai, 'Tercatat. Prediksi diperbarui.'),
     );
   }
 }
